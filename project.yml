@@ -7,7 +7,11 @@ targets:
   Airpisode:
     type: application
     platform: macOS
-    sources: [Airpisode]
+    sources:
+      - path: Airpisode
+        excludes:
+          - "TMDBKey.xcconfig.example"
+          - "TMDBKey.xcconfig"
     settings:
       base:
         GENERATE_INFOPLIST_FILE: NO
@@ -25,8 +29,8 @@ targets:
       - path: AirpisodeTests
         excludes:
           - "Fixtures/**"
-    resources:
-      - AirpisodeTests/Fixtures
+      - path: AirpisodeTests/Fixtures
+        buildPhase: resources
     dependencies:
       - target: Airpisode
     settings:
