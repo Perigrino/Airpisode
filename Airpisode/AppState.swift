@@ -12,15 +12,24 @@ final class AppState: ObservableObject {
     @Published var lastRefreshError: String?
 
     let tmdb: TMDBClientProtocol
+    let notifications: NotificationScheduler
     private let store: LibraryStore
 
-    init(store: LibraryStore = LibraryStore(), tmdb: TMDBClientProtocol = TMDBClient(apiKey: Secrets.tmdbKey)) {
+    init(
+        store: LibraryStore = LibraryStore(),
+        tmdb: TMDBClientProtocol = TMDBClient(apiKey: Secrets.tmdbKey),
+        notifications: NotificationScheduler = NotificationScheduler(client: SystemNotificationClient())
+    ) {
         self.store = store
         self.tmdb = tmdb
+        self.notifications = notifications
     }
 
     func loadLibrary() async {
         library = await store.load()
+        for entry in library.entries {
+            reschedule(titleID: entry.id)
+        }
     }
 
     // MARK: - Library mutations
@@ -35,7 +44,8 @@ final class AppState: ObservableObject {
     }
 
     func removeFromLibrary(_ titleID: String) {
-        // TODO(Task 9): cancel this title's pending notifications here.
+        let keys = (library.episodes[titleID] ?? []).map(\.id) + (library.movieReleases[titleID] ?? []).map(\.id)
+        notifications.cancelAll(forTitle: titleID, keys: keys)
         library.entries.removeAll { $0.id == titleID }
         library.titles.removeValue(forKey: titleID)
         library.episodes.removeValue(forKey: titleID)
@@ -73,8 +83,30 @@ final class AppState: ObservableObject {
             }
             lastRefreshError = nil
             try? await store.save(library)
+            reschedule(titleID: titleID)
         } catch {
             lastRefreshError = "Couldn't refresh \(library.titles[titleID]?.name ?? titleID): \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Notifications
+
+    func updateNotificationPreferences(_ mutate: (inout NotificationPreferences) -> Void) {
+        mutate(&library.preferences)
+        save()
+        for entry in library.entries {
+            reschedule(titleID: entry.id)
+        }
+    }
+
+    private func reschedule(titleID: String) {
+        guard let title = library.titles[titleID] else { return }
+        let episodes = library.episodes[titleID] ?? []
+        let releases = library.movieReleases[titleID] ?? []
+        let keys = episodes.map(\.id) + releases.map(\.id)
+        notifications.cancelAll(forTitle: titleID, keys: keys)
+        Task {
+            await notifications.schedule(for: title, episodes: episodes, movieReleases: releases, prefs: library.preferences)
         }
     }
 

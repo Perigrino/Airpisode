@@ -7,7 +7,7 @@ struct AirpisodeApp: App {
         WindowGroup("Airpisode") {
             RootView().environmentObject(appState)
         }
-        Settings { SettingsView() }
+        Settings { SettingsView().environmentObject(appState) }
     }
 }
 
