@@ -1,0 +1,34 @@
+name: Airpisode
+options:
+  bundleIdPrefix: com.airpisode
+  deploymentTarget:
+    macOS: "13.0"
+targets:
+  Airpisode:
+    type: application
+    platform: macOS
+    sources: [Airpisode]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Airpisode/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        SWIFT_VERSION: "5.9"
+    configFiles:
+      Debug: Airpisode/TMDBKey.xcconfig
+      Release: Airpisode/TMDBKey.xcconfig
+  AirpisodeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: AirpisodeTests
+        excludes:
+          - "Fixtures/**"
+    resources:
+      - AirpisodeTests/Fixtures
+    dependencies:
+      - target: Airpisode
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
