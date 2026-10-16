@@ -77,6 +77,19 @@ struct NotificationScheduler {
         }
     }
 
+    /// Debug helper: fires a single test notification after a delay so the user can verify permissions end-to-end.
+    func scheduleTest(in seconds: TimeInterval = 120) async {
+        let content = UNMutableNotificationContent()
+        content.title = "Airpisode test notification"
+        content.body = "If you can see this, notifications are working."
+        let request = UNNotificationRequest(
+            identifier: "debug-test",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+        )
+        try? await client.add(request)
+    }
+
     func cancelAll(forTitle titleID: String, keys: [String]) {
         let ids = keys.flatMap {
             [Self.preAlertID(titleID: titleID, key: $0), Self.imminentID(titleID: titleID, key: $0)]

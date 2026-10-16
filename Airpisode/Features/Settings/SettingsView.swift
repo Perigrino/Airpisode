@@ -45,6 +45,12 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Debug") {
+                Button("Send Test Notification in 2 Minutes") {
+                    Task { await appState.notifications.scheduleTest() }
+                }
+            }
+
             Section("About") {
                 Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
                     .font(.caption)
