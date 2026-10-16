@@ -12,6 +12,8 @@ struct AirpisodeApp: App {
 }
 
 struct RootView: View {
+    @EnvironmentObject private var appState: AppState
+
     var body: some View {
         NavigationView {
             List {
@@ -24,5 +26,6 @@ struct RootView: View {
             .frame(minWidth: 180)
             DashboardView()
         }
+        .task { await appState.loadLibrary() }
     }
 }
