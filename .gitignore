@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Xcode / build
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+
+# Secrets — TMDB API key, never commit
+Airpisode/TMDBKey.xcconfig
+
+# Swift Package Manager (if ever added)
+.build/
+.swiftpm/
+
+# Temporary persistence files
+*.tmp
