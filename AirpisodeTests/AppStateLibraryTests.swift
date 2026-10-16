@@ -68,4 +68,27 @@ final class AppStateLibraryTests: XCTestCase {
         XCTAssertEqual(stub.tvDetailCallCount, 1)
         XCTAssertEqual(stub.seasonCallNumbers, [1])
     }
+
+    func testRunFullRefreshUpdatesStaleTitleAndReportsNoError() async {
+        let stub = StubTMDBClient()
+        stub.tvDetailResult = TMDBTVDetail(
+            id: 100, name: "Severance", overview: nil, posterPath: nil, firstAirDate: nil,
+            status: nil, seasons: [TMDBSeasonSummary(seasonNumber: 1, episodeCount: 1, airDate: nil)]
+        )
+        stub.seasons[1] = TMDBSeason(seasonNumber: 1, episodes: [
+            TMDBTVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Good News", overview: nil, airDate: "2099-01-01", stillPath: nil)
+        ])
+        let app = AppState(
+            store: LibraryStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            tmdb: stub,
+            notifications: NotificationScheduler(client: MockNotificationClient())
+        )
+        app.addToLibrary(sampleTitle())
+
+        await app.runFullRefresh()
+
+        XCTAssertNotNil(app.library.titles["tv-100"]?.lastRefreshed)
+        XCTAssertNil(app.lastRefreshError)
+        XCTAssertEqual(stub.tvDetailCallCount, 1)
+    }
 }

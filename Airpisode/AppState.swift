@@ -57,6 +57,22 @@ final class AppState: ObservableObject {
 
     // MARK: - Refresh
 
+    /// Refreshes every tracked title through the ReleaseEngine (staleness-tiered) and reschedules alerts.
+    func runFullRefresh() async {
+        let engine = ReleaseEngine(client: tmdb)
+        var snapshot = library
+        _ = await engine.refreshIfNeeded(library: &snapshot, now: .now)
+        library = snapshot
+        try? await store.save(library)
+        let failed = snapshot.entries.filter { snapshot.titles[$0.id]?.lastRefreshed == nil }.count
+        lastRefreshError = failed > 0
+            ? "Couldn't refresh \(failed) title\(failed == 1 ? "" : "s"). Will retry automatically."
+            : nil
+        for entry in snapshot.entries {
+            reschedule(titleID: entry.id)
+        }
+    }
+
     func refreshTitle(_ titleID: String) async {
         guard let entry = library.entries.first(where: { $0.id == titleID }) else { return }
         do {

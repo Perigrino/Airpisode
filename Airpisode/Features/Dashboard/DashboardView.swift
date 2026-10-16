@@ -18,21 +18,39 @@ struct DashboardView: View {
     } }
 
     var body: some View {
-        Group {
-            if items.isEmpty {
-                Text("Add your first show in Discover")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List {
-                    section("Today", today)
-                    section("This Week", thisWeek)
-                    section("Later", later)
+        VStack(spacing: 0) {
+            if let error = appState.lastRefreshError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.orange.opacity(0.1))
+            }
+            Group {
+                if items.isEmpty {
+                    Text("Add your first show in Discover")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        section("Today", today)
+                        section("This Week", thisWeek)
+                        section("Later", later)
+                    }
+                    .listStyle(.inset)
                 }
-                .listStyle(.inset)
             }
         }
         .navigationTitle("Dashboard")
+        .toolbar {
+            Button {
+                Task { await appState.runFullRefresh() }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .help("Refresh release dates")
+        }
     }
 
     @ViewBuilder
