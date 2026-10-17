@@ -46,8 +46,13 @@ struct SettingsView: View {
             }
 
             Section("Debug") {
-                Button("Send Test Notification in 2 Minutes") {
-                    Task { await appState.notifications.scheduleTest() }
+                Button("Send Test Notification (fires in 10s)") {
+                    Task { await appState.notifications.scheduleTest(in: 10) }
+                }
+                if prefs.permissionRequested && permissionDenied {
+                    Text("Status: denied. Enable in System Settings → Notifications → Airpisode.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
 

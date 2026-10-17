@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 enum SidebarSection: String, Hashable {
     case dashboard, shows, movies, discover
@@ -7,11 +8,27 @@ enum SidebarSection: String, Hashable {
 @main
 struct AirpisodeApp: App {
     @StateObject private var appState = AppState()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     var body: some Scene {
         WindowGroup("Airpisode") {
             RootView().environmentObject(appState)
         }
         Settings { SettingsView().environmentObject(appState) }
+    }
+}
+
+/// Set as UNUserNotificationCenter delegate so banners show even while the app is frontmost.
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
 }
 

@@ -77,17 +77,51 @@ struct NotificationScheduler {
         }
     }
 
-    /// Debug helper: fires a single test notification after a delay so the user can verify permissions end-to-end.
+    /// Debug helper: requests permission if needed, then fires a test notification after a delay.
     func scheduleTest(in seconds: TimeInterval = 120) async {
+        let center = UNUserNotificationCenter.current()
+        var status = await center.notificationSettings().authorizationStatus
+        if status == .notDetermined {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            status = await center.notificationSettings().authorizationStatus
+        }
+
         let content = UNMutableNotificationContent()
         content.title = "Airpisode test notification"
         content.body = "If you can see this, notifications are working."
         let request = UNNotificationRequest(
-            identifier: "debug-test",
+            identifier: "debug-test-\(Int.random(in: 0...1_000_000))",
             content: content,
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
         )
-        try? await client.add(request)
+        do {
+            try await client.add(request)
+            content.title = "Airpisode test scheduled ✓"
+            content.body = "Status: \(Self.statusName(status)). Fires in \(Int(seconds))s — even while the app is open."
+            _ = try? await client.add(UNNotificationRequest(
+                identifier: "debug-test-confirm",
+                content: content,
+                trigger: nil
+            ))
+        } catch {
+            content.title = "Airpisode test failed"
+            content.body = "Scheduling failed: \(error.localizedDescription). Authorization status: \(Self.statusName(status))."
+            _ = try? await client.add(UNNotificationRequest(
+                identifier: "debug-test-error",
+                content: content,
+                trigger: nil
+            ))
+        }
+    }
+
+    private static func statusName(_ status: UNAuthorizationStatus) -> String {
+        switch status {
+        case .notDetermined: return "not determined — click 'Enable Notifications' first"
+        case .denied: return "denied — enable in System Settings → Notifications → Airpisode"
+        case .authorized, .provisional: return "authorized"
+        case .ephemeral: return "authorized (ephemeral)"
+        @unknown default: return "unknown"
+        }
     }
 
     func cancelAll(forTitle titleID: String, keys: [String]) {
