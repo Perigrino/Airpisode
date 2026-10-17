@@ -1,5 +1,24 @@
 import Foundation
 
+/// Errors worth naming. TMDB answers 401 for a missing or wrong key, and a bare
+/// `URLError(.badServerResponse)` would surface that to the user as "-1011".
+enum TMDBError: LocalizedError, Equatable {
+    case missingKey
+    case notFound
+    case server(Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingKey:
+            "Your TMDB API key is missing or invalid. Add it in Settings."
+        case .notFound:
+            "TMDB has no record of that title."
+        case .server(let code):
+            "TMDB returned an error (HTTP \(code)). Try again in a moment."
+        }
+    }
+}
+
 protocol TMDBClientProtocol: Sendable {
     func searchMulti(query: String) async throws -> [TMDBSearchResult]
     func tvDetail(id: Int) async throws -> TMDBTVDetail
@@ -27,8 +46,18 @@ struct TMDBClient: TMDBClientProtocol {
         var comps = URLComponents(url: TMDBClient.base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         comps.queryItems = query + [URLQueryItem(name: "api_key", value: apiKey())]
         let (data, response) = try await session.data(from: comps.url!)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+        guard let http = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
+        }
+        switch http.statusCode {
+        case 200:
+            break
+        case 401:
+            throw TMDBError.missingKey
+        case 404:
+            throw TMDBError.notFound
+        default:
+            throw TMDBError.server(http.statusCode)
         }
         return try TMDBClient.decoder.decode(T.self, from: data)
     }
