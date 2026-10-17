@@ -56,6 +56,7 @@ struct DashboardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(Motion.smooth, value: justUpdated)
         }
+        .scrollIndicators(.hidden)
         .screenBackground()
         .navigationTitle("Upcoming")
         .toolbar {

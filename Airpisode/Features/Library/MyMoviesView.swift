@@ -36,6 +36,7 @@ struct MyMoviesView: View {
                 .padding(.bottom, DockBar.contentInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .scrollIndicators(.hidden)
             .screenBackground()
             // Snap the expanded card to the top so its details are fully in view.
             .onChange(of: expandedID) { newValue in

@@ -26,6 +26,13 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+/// The app's one permitted window size: a portrait column whose window and content are the
+/// same width, so there are never grey margins beside the page.
+enum WindowMetrics {
+    static let width: CGFloat = 720
+    static let height: CGFloat = 1180
+}
+
 @main
 struct AirpisodeApp: App {
     @StateObject private var appState = AppState()
@@ -36,6 +43,8 @@ struct AirpisodeApp: App {
                 .environmentObject(appState)
                 .preferredColorScheme(.dark)
         }
+        .defaultSize(width: WindowMetrics.width, height: WindowMetrics.height)
+        .windowResizability(.contentSize)
         Settings {
             SettingsView()
                 .environmentObject(appState)
@@ -56,6 +65,84 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound])
+    }
+}
+
+/// Pins the main window to one fixed portrait size. SwiftUI's `windowResizability` and a content
+/// `maxWidth` only express a *minimum* — an AppKit window can still be dragged past them, which
+/// is what put grey margins on either side of the page. The window is therefore made
+/// non-resizable and re-pinned every time it attaches, so a stale saved frame cannot widen it.
+private final class PortraitWindow: NSView {
+    private static var liveScrollSweep: (any NSObjectProtocol)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        Self.pin(window)
+        Self.observeLiveScrollingIfNeeded()
+    }
+
+    override func viewWillDraw() {
+        super.viewWillDraw()
+        // Re-swept on every layout pass: SwiftUI creates a fresh NSScrollView per page, and a
+        // fresh page could briefly resurrect a scroller.
+        Self.hideScrollbars(in: window?.contentView)
+    }
+
+    /// SwiftUI can re-enable a scroll view's scroller while a scroll is in flight, which draws a
+    /// thumb for about a second. Sweeping again on the live-scroll notification keeps the thumb
+    /// from ever getting a frame to draw.
+    private static func observeLiveScrollingIfNeeded() {
+        guard liveScrollSweep == nil else { return }
+        liveScrollSweep = NotificationCenter.default.addObserver(
+            forName: NSScrollView.didLiveScrollNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let scroll = note.object as? NSScrollView else { return }
+            scroll.verticalScroller?.alphaValue = 0
+            scroll.horizontalScroller?.alphaValue = 0
+        }
+    }
+
+    /// Every NSScrollView gets its scrollers removed outright — scrolling itself is untouched.
+    static func hideScrollbars(in view: NSView?) {
+        guard let view else { return }
+        if let scroll = view as? NSScrollView {
+            scroll.verticalScroller?.alphaValue = 0
+            scroll.horizontalScroller?.alphaValue = 0
+            scroll.verticalScroller?.isHidden = true
+            scroll.horizontalScroller?.isHidden = true
+            scroll.hasVerticalScroller = false
+            scroll.hasHorizontalScroller = false
+            scroll.autohidesScrollers = true
+        }
+        view.subviews.forEach { hideScrollbars(in: $0) }
+    }
+
+    static func pin(_ window: NSWindow?) {
+        guard let window else { return }
+        let size = NSSize(width: WindowMetrics.width, height: WindowMetrics.height)
+        window.styleMask.remove(.resizable)
+        window.collectionBehavior.remove(.fullScreenPrimary)
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
+        window.minSize = size
+        window.maxSize = size
+        window.setFrame(NSRect(origin: window.frame.origin, size: size), display: true)
+    }
+}
+
+private struct WindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = PortraitWindow()
+        // The view can attach after this returns, and window-frame restoration can run after
+        // that; pin once more once everything has settled.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { PortraitWindow.pin(view.window) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // SwiftUI re-creates scroll views when a page changes, so sweep on updates too.
+        PortraitWindow.hideScrollbars(in: nsView.window?.contentView)
     }
 }
 
@@ -87,7 +174,10 @@ struct RootView: View {
                     }
             }
         }
-        .frame(minWidth: 720, minHeight: 520)
+        // Fixed in both axes: an unbounded content height was what let the window be dragged
+        // shorter, while AppKit alone could only see the width limit.
+        .frame(width: WindowMetrics.width, height: WindowMetrics.height)
+        .background(WindowConfigurator())
         .task { await appState.loadLibrary() }
         .sheet(isPresented: $needsKey) {
             WelcomeView(
