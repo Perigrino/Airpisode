@@ -130,7 +130,9 @@ final class AppState: ObservableObject {
 
     /// Refreshes tracked titles through the ReleaseEngine and reschedules alerts.
     /// `force` bypasses the staleness TTL so a manual refresh always hits the network.
-    func runFullRefresh(force: Bool = true) async {
+    /// `animated` keeps the minimum-visible spinner for user-initiated refreshes; background
+    /// passes use `false` so an idle hour never flashes the window's spinner.
+    func runFullRefresh(force: Bool = true, animated: Bool = true) async {
         guard !isRefreshing else { return }
         isRefreshing = true
         let started = Date()
@@ -150,7 +152,7 @@ final class AppState: ObservableObject {
 
         // Keep the spinner visible long enough to read even when nothing was stale.
         let elapsed = Date().timeIntervalSince(started)
-        if elapsed < 0.6 {
+        if animated, elapsed < 0.6 {
             try? await Task.sleep(nanoseconds: UInt64((0.6 - elapsed) * 1_000_000_000))
         }
         isRefreshing = false
@@ -186,6 +188,41 @@ final class AppState: ObservableObject {
         } catch {
             lastRefreshError = "Couldn't refresh \(library.titles[titleID]?.name ?? titleID): \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Background refresh
+
+    private var backgroundRefreshTicker: Timer?
+    /// Bumped once per background pass so tests can observe the ticker without network.
+    private(set) var backgroundRefreshTicks = 0
+
+    /// The process now outlives its window, and these passes are what keep alerts accurate while
+    /// it does: each pass refreshes only titles whose staleness TTL elapsed (6h inside 14 days
+    /// of an airing, 24h inside 60 days) and re-schedules their notifications, so every tracked
+    /// title still contacts TMDB at least once a day. The timer lives on AppState, not on a
+    /// view, so ticks keep firing while the window is closed. Safe to repeat: the guard makes
+    /// the first call the only one that schedules.
+    func startBackgroundRefresh(every: TimeInterval = 3_600) {
+        guard backgroundRefreshTicker == nil else { return }
+        let ticker = Timer(timeInterval: every, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.tickBackgroundRefresh() }
+        }
+        backgroundRefreshTicker = ticker
+        RunLoop.main.add(ticker, forMode: .common)
+    }
+
+    func isBackgroundRefreshRunning() -> Bool {
+        backgroundRefreshTicker != nil
+    }
+
+    func stopBackgroundRefresh() {
+        backgroundRefreshTicker?.invalidate()
+        backgroundRefreshTicker = nil
+    }
+
+    private func tickBackgroundRefresh() async {
+        backgroundRefreshTicks += 1
+        await runFullRefresh(force: false, animated: false)
     }
 
     // MARK: - Notifications

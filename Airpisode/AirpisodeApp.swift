@@ -64,6 +64,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UserDefaults.standard.set("WhenScrolling", forKey: "AppleShowScrollBars")
     }
 
+    /// Closing the window only hides it: the process keeps running in the background so the
+    /// hourly refresh and the alert scheduler stay alive overnight, and clicking the dock icon
+    /// brings the window back.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    /// Dock clicks while the main window is merely hidden bring it back up.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows visible: Bool) -> Bool {
+        if visible { return true }
+        return BackgroundCloseIntercept.bringMainWindowBackIfNeeded() ? false : true
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -135,6 +148,53 @@ private final class PortraitWindow: NSView {
         window.minSize = size
         window.maxSize = size
         window.setFrame(NSRect(origin: window.frame.origin, size: size), display: true)
+        BackgroundCloseIntercept.install(on: window)
+    }
+}
+
+/// Sits between SwiftUI and the window so a red-button or Cmd+W close only HIDES the window:
+/// SwiftUI terminates the process when its last WindowGroup window actually closes, which
+/// would take the background refresh and the alert scheduler with it. The original delegate is
+/// preserved and everything it implements stays forwarded to it.
+final class BackgroundCloseIntercept: NSObject, NSWindowDelegate {
+    static private(set) var mainWindow: NSWindow?
+
+    static private var proxies: [ObjectIdentifier: BackgroundCloseIntercept] = [:]
+
+    static func install(on window: NSWindow?) {
+        guard let window, !(window.delegate is BackgroundCloseIntercept) else { return }
+        let proxy = BackgroundCloseIntercept(original: window.delegate)
+        window.delegate = proxy
+        proxies[ObjectIdentifier(window)] = proxy
+        mainWindow = window
+    }
+
+    static func bringMainWindowBackIfNeeded() -> Bool {
+        guard let main = mainWindow, !main.isVisible else { return false }
+        main.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        return true
+    }
+
+    private let original: NSWindowDelegate?
+
+    init(original: NSWindowDelegate?) {
+        self.original = original
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Hide, never destroy: the window must keep existing for the app to run in the
+        // background; a dock click later brings it back (see the AppDelegate's reopen hook).
+        sender.orderOut(nil)
+        return false
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        super.responds(to: aSelector) || (original?.responds(to: aSelector) ?? false)
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        (original?.responds(to: aSelector) ?? false) ? original : nil
     }
 }
 
@@ -188,7 +248,11 @@ struct RootView: View {
         // shorter, while AppKit alone could only see the width limit.
         .frame(width: WindowMetrics.width, height: WindowMetrics.height)
         .background(WindowConfigurator())
-        .task { await appState.loadLibrary() }
+        .task {
+            await appState.loadLibrary()
+            // Keeps alerts fresh even after the window is closed (hourly passes).
+            appState.startBackgroundRefresh()
+        }
         .sheet(isPresented: $needsKey) {
             WelcomeView(
                 onDone: {
