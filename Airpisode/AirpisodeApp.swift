@@ -1,8 +1,29 @@
 import SwiftUI
 import UserNotifications
 
-enum SidebarSection: String, Hashable {
+/// The app's top-level destinations, shown as items in the bottom dock.
+enum AppSection: String, CaseIterable, Identifiable, Hashable {
     case dashboard, shows, movies, discover
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .dashboard: return "Upcoming"
+        case .shows: return "My Shows"
+        case .movies: return "My Movies"
+        case .discover: return "Discover"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .dashboard: return "calendar"
+        case .shows: return "tv"
+        case .movies: return "film"
+        case .discover: return "magnifyingglass"
+        }
+    }
 }
 
 @main
@@ -41,19 +62,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 struct RootView: View {
     @EnvironmentObject private var appState: AppState
     @State private var needsKey = !Secrets.hasKey
+    @State private var dockVisible = false
 
     var body: some View {
-        NavigationView {
-            List(selection: $appState.selectedSection) {
-                link(.dashboard, "Upcoming", "calendar")
-                link(.shows, "My Shows", "tv")
-                link(.movies, "My Movies", "film")
-                link(.discover, "Discover", "magnifyingglass")
+        NavigationStack {
+            GeometryReader { geo in
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .bottom) { dockLayer }
+                    // Reveal the dock only when the pointer reaches the bottom edge, so it never
+                    // covers content you are reading or clicking.
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let point):
+                            let bottom = geo.size.height
+                            if !dockVisible, point.y > bottom - 100 {
+                                dockVisible = true
+                            } else if dockVisible, point.y < bottom - 150 {
+                                dockVisible = false
+                            }
+                        case .ended:
+                            if dockVisible { dockVisible = false }
+                        }
+                    }
             }
-            .listStyle(.sidebar)
-            .frame(minWidth: 190)
-            DashboardView()
         }
+        .frame(minWidth: 720, minHeight: 520)
         .task { await appState.loadLibrary() }
         .sheet(isPresented: $needsKey) {
             WelcomeView(
@@ -66,17 +100,24 @@ struct RootView: View {
         }
     }
 
-    private func link(_ section: SidebarSection, _ title: String, _ icon: String) -> some View {
-        NavigationLink(tag: section, selection: $appState.selectedSection) {
-            destination(for: section)
-        } label: {
-            Label(title, systemImage: icon)
+    /// Floating dock plus a small handle that hints where it lives while it is parked.
+    private var dockLayer: some View {
+        VStack(spacing: 8) {
+            DockBar(selection: $appState.selectedSection)
+                .opacity(dockVisible ? 1 : 0)
+                .offset(y: dockVisible ? 0 : 36)
+                .allowsHitTesting(dockVisible)
+            Capsule()
+                .fill(.white.opacity(dockVisible ? 0 : 0.22))
+                .frame(width: 46, height: 5)
         }
+        .padding(.bottom, 10)
+        .animation(Motion.smooth, value: dockVisible)
     }
 
     @ViewBuilder
-    private func destination(for section: SidebarSection) -> some View {
-        switch section {
+    private var content: some View {
+        switch appState.selectedSection ?? .dashboard {
         case .dashboard: DashboardView()
         case .shows: MyShowsView()
         case .movies: MyMoviesView()

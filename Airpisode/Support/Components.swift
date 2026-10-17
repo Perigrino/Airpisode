@@ -75,20 +75,37 @@ struct CountdownText: View {
     }
 }
 
-/// The in-app app mark: gradient rounded square with a play-on-TV glyph.
+/// The in-app app mark: the "8b fade" icon — a play node over a rail that dissolves downward.
 struct AppLogo: View {
     var size: CGFloat = 84
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-            .fill(Theme.gradient)
-            .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: "play.tv.fill")
-                    .font(.system(size: size * 0.42, weight: .semibold))
-                    .foregroundStyle(.white)
-            )
-            .shadow(color: Theme.accent.opacity(0.45), radius: size * 0.22, y: size * 0.1)
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
+                .fill(Theme.background)
+
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Theme.accent.opacity(0.95), Theme.accentMagenta.opacity(0)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .frame(width: size * 0.066, height: size * 0.40)
+                .offset(y: size * 0.057)
+
+            Circle()
+                .fill(.white)
+                .frame(width: size * 0.27, height: size * 0.27)
+                .overlay(
+                    Image(systemName: "play.fill")
+                        .font(.system(size: size * 0.12, weight: .bold))
+                        .foregroundStyle(Theme.gradient)
+                )
+                .offset(y: -size * 0.145)
+        }
+        .frame(width: size, height: size)
+        .shadow(color: Theme.accent.opacity(0.35), radius: size * 0.2, y: size * 0.08)
     }
 }
 
