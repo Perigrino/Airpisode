@@ -40,7 +40,7 @@ struct ReleaseEngine {
                     let detail = try await client.movieDetail(id: entry.tmdbID)
                     var newTitle = TMDBMapper.title(from: detail)
                     let response = try await client.movieReleaseDates(id: entry.tmdbID)
-                    let region = UserDefaults.standard.string(forKey: "defaultRegion") ?? "US"
+                    let region = ConfigStore.defaultRegion
                     let releases = TMDBMapper.movieReleases(response, movieID: entry.tmdbID, region: region)
                     changes += Self.diff(
                         old: library.movieReleases[titleID] ?? [], new: releases,

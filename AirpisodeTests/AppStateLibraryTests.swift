@@ -108,4 +108,51 @@ final class AppStateLibraryTests: XCTestCase {
         XCTAssertNil(app.lastRefreshError)
         XCTAssertEqual(stub.tvDetailCallCount, 1)
     }
+
+    private func episodes(_ numbers: ClosedRange<Int>) -> [Episode] {
+        numbers.map {
+            Episode(tmdbID: 100, seasonNumber: 1, episodeNumber: $0, name: "E\($0)",
+                    overview: nil, airDate: nil, stillPath: nil)
+        }
+    }
+
+    func testSetEpisodesWatchedMarksAndUnmarksInBulk() {
+        let app = makeSUT()
+        let season = episodes(1...3)
+
+        app.setEpisodesWatched(true, episodes: season, titleID: "tv-100")
+        XCTAssertEqual(app.library.watchedEpisodes, Set(season.map(\.id)))
+
+        app.setEpisodesWatched(false, episodes: Array(season.prefix(2)), titleID: "tv-100")
+        XCTAssertEqual(app.library.watchedEpisodes, [season[2].id])
+    }
+
+    func testSetEpisodesWatchedIgnoresEmptyInput() {
+        let app = makeSUT()
+        app.setEpisodesWatched(true, episodes: [], titleID: "tv-100")
+        XCTAssertTrue(app.library.watchedEpisodes.isEmpty)
+    }
+
+    func testSetEpisodeWatchedDelegatesToBulk() {
+        let app = makeSUT()
+        let only = episodes(1...1)[0]
+
+        app.setEpisodeWatched(true, episode: only, titleID: "tv-100")
+        XCTAssertEqual(app.library.watchedEpisodes, [only.id])
+
+        app.setEpisodeWatched(false, episode: only, titleID: "tv-100")
+        XCTAssertTrue(app.library.watchedEpisodes.isEmpty)
+    }
+
+    func testRemoveFromLibraryClearsWatchedEpisodes() {
+        let app = makeSUT()
+        app.addToLibrary(sampleTitle())
+        let season = episodes(1...3)
+        app.library.episodes["tv-100"] = season
+        app.setEpisodesWatched(true, episodes: season, titleID: "tv-100")
+
+        app.removeFromLibrary("tv-100")
+
+        XCTAssertTrue(app.library.watchedEpisodes.isEmpty)
+    }
 }

@@ -36,7 +36,7 @@ final class LibraryUpcomingTests: XCTestCase {
             upcoming,
             Episode(tmdbID: 100, seasonNumber: 2, episodeNumber: 6, name: "No date", overview: nil, airDate: nil, stillPath: nil),
         ]
-        lib.watchedShows.insert(upcoming.id)
+        lib.watchedEpisodes.insert(upcoming.id)
         XCTAssertNil(lib.nextEpisode(forTitle: "tv-100", now: now))
     }
 

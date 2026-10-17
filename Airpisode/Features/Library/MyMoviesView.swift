@@ -12,23 +12,37 @@ struct MyMoviesView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                PageHeader(title: "My Movies",
-                           subtitle: movies.isEmpty ? "Track your first movie from Discover"
-                                                    : "\(movies.count) movie\(movies.count == 1 ? "" : "s") tracked")
-                if movies.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(movies) { title in
-                        card(title)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    PageHeader(title: "My Movies",
+                               subtitle: movies.isEmpty ? "Track your first movie from Discover"
+                                                        : "\(movies.count) movie\(movies.count == 1 ? "" : "s") tracked")
+                    HistorySection(
+                        items: appState.library.releasedUnwatchedMovies(),
+                        onMarkWatched: { item in
+                            appState.setMovieWatched(true, titleID: item.title.id)
+                        }
+                    )
+                    if movies.isEmpty {
+                        emptyState
+                    } else {
+                        ForEach(movies) { title in
+                            card(title).id(title.id)
+                        }
                     }
                 }
+                .padding(24)
+                .padding(.bottom, DockBar.contentInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .screenBackground()
+            // Snap the expanded card to the top so its details are fully in view.
+            .onChange(of: expandedID) { newValue in
+                guard let id = newValue else { return }
+                withAnimation(Motion.smooth) { proxy.scrollTo(id, anchor: .top) }
+            }
         }
-        .screenBackground()
         .navigationTitle("My Movies")
         .toolbar {
             Button {

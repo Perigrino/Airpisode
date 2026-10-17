@@ -2,6 +2,14 @@ import SwiftUI
 
 struct EpisodeRowView: View {
     let episode: Episode
+    /// Whether the user has already watched this episode. Ignored when `onToggleWatched` is nil.
+    var isWatched: Bool = false
+    /// When set, a watched toggle appears for episodes that have already aired.
+    var onToggleWatched: (() -> Void)? = nil
+    /// Whether this row is picked in bulk-selection mode.
+    var isSelected: Bool = false
+    /// When set, the row shows a selection checkbox instead of the watched toggle.
+    var onToggleSelected: (() -> Void)? = nil
 
     private var aired: Bool {
         guard let date = episode.airDate else { return false }
@@ -36,6 +44,27 @@ struct EpisodeRowView: View {
             Text(dateText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            // Only aired episodes can have been watched, so the toggle appears only then.
+            if aired {
+                if let onToggleSelected {
+                    Button(action: onToggleSelected) {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 15))
+                            .foregroundStyle(isSelected ? Theme.accent : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isSelected ? "Deselect" : "Select")
+                } else if let onToggleWatched {
+                    Button(action: onToggleWatched) {
+                        Image(systemName: isWatched ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 15))
+                            .foregroundStyle(isWatched ? Theme.accent : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isWatched ? "Mark as unwatched" : "Mark as watched")
+                }
+            }
         }
         .padding(.vertical, 4)
     }

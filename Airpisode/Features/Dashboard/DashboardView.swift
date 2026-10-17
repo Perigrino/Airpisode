@@ -52,6 +52,7 @@ struct DashboardView: View {
                 }
             }
             .padding(24)
+            .padding(.bottom, DockBar.contentInset)
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(Motion.smooth, value: justUpdated)
         }

@@ -1,14 +1,11 @@
 import SwiftUI
 
 enum Secrets {
-    private static let storageKey = "tmdbAPIKey"
-
     /// The user's TMDB API key: one entered in Settings wins, otherwise the build-time
     /// Info.plist value is a developer fallback. A distributed build ships without a baked key,
-    /// so the app asks for one on first launch.
+    /// so the app asks for one on first launch. Stored in the app's own config file, not UserDefaults.
     static var tmdbKey: String {
-        let stored = UserDefaults.standard.string(forKey: storageKey)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let stored = ConfigStore.tmdbAPIKey
         if !stored.isEmpty { return stored }
         let baked = Bundle.main.object(forInfoDictionaryKey: "TMDB_API_KEY") as? String ?? ""
         return baked.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -17,7 +14,7 @@ enum Secrets {
     static var hasKey: Bool { !tmdbKey.isEmpty }
 
     static func setTMDBKey(_ value: String) {
-        UserDefaults.standard.set(value.trimmingCharacters(in: .whitespacesAndNewlines), forKey: storageKey)
+        ConfigStore.setTMDBAPIKey(value)
     }
 }
 
@@ -26,7 +23,7 @@ final class AppState: ObservableObject {
     @Published var library = Library()
     @Published var lastRefreshError: String?
     @Published var isRefreshing = false
-    @Published var selectedSection: SidebarSection? = .dashboard
+    @Published var selectedSection: AppSection? = .dashboard
 
     let tmdb: TMDBClientProtocol
     let notifications: NotificationScheduler
@@ -44,6 +41,7 @@ final class AppState: ObservableObject {
 
     func loadLibrary() async {
         library = await store.load()
+        if library.migrateLegacyWatchedState() { save() }
         for entry in library.entries {
             reschedule(titleID: entry.id)
         }
@@ -61,7 +59,8 @@ final class AppState: ObservableObject {
     }
 
     func removeFromLibrary(_ titleID: String) {
-        let keys = (library.episodes[titleID] ?? []).map(\.id) + (library.movieReleases[titleID] ?? []).map(\.id)
+        let episodes = library.episodes[titleID] ?? []
+        let keys = episodes.map(\.id) + (library.movieReleases[titleID] ?? []).map(\.id)
         notifications.cancelAll(forTitle: titleID, keys: keys)
         library.entries.removeAll { $0.id == titleID }
         library.titles.removeValue(forKey: titleID)
@@ -69,6 +68,42 @@ final class AppState: ObservableObject {
         library.movieReleases.removeValue(forKey: titleID)
         library.watchedShows.remove(titleID)
         library.watchedMovies.remove(titleID)
+        library.watchedEpisodes.subtract(episodes.map(\.id))
+        save()
+    }
+
+    // MARK: - Watched state
+
+    /// Marks a released episode watched (or unwatched). Watched episodes leave History, and
+    /// marking one cancels the alerts that were still scheduled for it.
+    func setEpisodeWatched(_ watched: Bool, episode: Episode, titleID: String) {
+        setEpisodesWatched(watched, episodes: [episode], titleID: titleID)
+    }
+
+    /// Bulk version of `setEpisodeWatched`, used by the season-level actions in a show's
+    /// episode list.
+    func setEpisodesWatched(_ watched: Bool, episodes: [Episode], titleID: String) {
+        guard !episodes.isEmpty else { return }
+        let ids = episodes.map(\.id)
+        if watched {
+            library.watchedEpisodes.formUnion(ids)
+            // Nothing left to alert about for episodes already watched.
+            notifications.cancelAll(forTitle: titleID, keys: ids)
+        } else {
+            library.watchedEpisodes.subtract(ids)
+            // Un-watching can bring an episode back into the alert schedule.
+            reschedule(titleID: titleID)
+        }
+        save()
+    }
+
+    /// Marks a movie watched (or unwatched). Watched movies leave History.
+    func setMovieWatched(_ watched: Bool, titleID: String) {
+        if watched {
+            library.watchedMovies.insert(titleID)
+        } else {
+            library.watchedMovies.remove(titleID)
+        }
         save()
     }
 
@@ -140,7 +175,7 @@ final class AppState: ObservableObject {
                 let detail = try await tmdb.movieDetail(id: entry.tmdbID)
                 var title = TMDBMapper.title(from: detail)
                 let releases = try await tmdb.movieReleaseDates(id: entry.tmdbID)
-                let region = UserDefaults.standard.string(forKey: "defaultRegion") ?? "US"
+                let region = ConfigStore.defaultRegion
                 title.lastRefreshed = Date()
                 library.titles[titleID] = title
                 library.movieReleases[titleID] = TMDBMapper.movieReleases(releases, movieID: entry.tmdbID, region: region)

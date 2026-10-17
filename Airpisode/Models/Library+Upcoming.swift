@@ -14,7 +14,7 @@ extension Library {
         (episodes[titleID] ?? [])
             .filter { episode in
                 guard let airDate = episode.airDate, airDate >= now else { return false }
-                return !watchedShows.contains(episode.id)
+                return !watchedEpisodes.contains(episode.id)
             }
             .min { ($0.airDate ?? .distantFuture) < ($1.airDate ?? .distantFuture) }
     }

@@ -155,6 +155,76 @@ struct TitleDetailContent: View {
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.accent.opacity(0.15)))
     }
 
+    // MARK: - Episode selection
+
+    @State private var isSelectingEpisodes = false
+    @State private var selectedEpisodeIDs: Set<String> = []
+
+    /// Header for the episode list, with the bulk-selection switch.
+    private var episodeHeader: some View {
+        HStack(spacing: 12) {
+            Text("Episodes").font(.headline)
+            Spacer(minLength: 0)
+            Button(isSelectingEpisodes ? "Done" : "Select") {
+                withAnimation(Motion.smooth) {
+                    isSelectingEpisodes.toggle()
+                    if !isSelectingEpisodes { selectedEpisodeIDs.removeAll() }
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .foregroundStyle(Theme.accent)
+            .help("Pick several episodes and mark them watched at once")
+        }
+    }
+
+    /// Shown while selecting: a count plus the bulk actions.
+    private func selectionBar(episodes: [Episode]) -> some View {
+        let aired = episodes.filter { ($0.airDate ?? .distantFuture) <= .now }
+        let hasSelection = !selectedEpisodeIDs.isEmpty
+        return HStack(spacing: 14) {
+            Text("\(selectedEpisodeIDs.count) selected")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Button("Select all aired") {
+                withAnimation(Motion.quick) { selectedEpisodeIDs.formUnion(aired.map(\.id)) }
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .foregroundStyle(Theme.accent)
+            Button("Mark watched") { applySelection(watched: true) }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(hasSelection ? Theme.accent : Color.secondary)
+                .disabled(!hasSelection)
+            Button("Unmark") { applySelection(watched: false) }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(hasSelection ? Theme.accent : Color.secondary)
+                .disabled(!hasSelection)
+        }
+    }
+
+    private func toggleSelected(_ episode: Episode) {
+        if selectedEpisodeIDs.contains(episode.id) {
+            selectedEpisodeIDs.remove(episode.id)
+        } else {
+            selectedEpisodeIDs.insert(episode.id)
+        }
+    }
+
+    /// Applies the picked episodes across every season, then leaves selection mode.
+    private func applySelection(watched: Bool) {
+        let chosen = (appState.library.episodes[titleID] ?? [])
+            .filter { selectedEpisodeIDs.contains($0.id) }
+        appState.setEpisodesWatched(watched, episodes: chosen, titleID: titleID)
+        withAnimation(Motion.smooth) {
+            isSelectingEpisodes = false
+            selectedEpisodeIDs.removeAll()
+        }
+    }
+
     // MARK: - Episodes
 
     @ViewBuilder
@@ -163,7 +233,8 @@ struct TitleDetailContent: View {
         if seasons.isEmpty {
             Text("No seasons listed").foregroundStyle(.secondary)
         } else {
-            sectionHeader("Episodes")
+            episodeHeader
+
             Picker("Season", selection: Binding(
                 get: { selectedSeason ?? seasons.first },
                 set: { selectedSeason = $0 }
@@ -178,8 +249,27 @@ struct TitleDetailContent: View {
             let episodes = (appState.library.episodes[titleID] ?? [])
                 .filter { $0.seasonNumber == (selectedSeason ?? seasons.first) }
                 .sorted { $0.episodeNumber < $1.episodeNumber }
+
+            if isSelectingEpisodes {
+                selectionBar(episodes: episodes)
+            }
+
             ForEach(episodes) { episode in
-                EpisodeRowView(episode: episode)
+                EpisodeRowView(
+                    episode: episode,
+                    isWatched: appState.library.isWatched(episode),
+                    onToggleWatched: isSelectingEpisodes ? nil : {
+                        withAnimation(Motion.smooth) {
+                            appState.setEpisodeWatched(
+                                !appState.library.isWatched(episode),
+                                episode: episode,
+                                titleID: titleID
+                            )
+                        }
+                    },
+                    isSelected: selectedEpisodeIDs.contains(episode.id),
+                    onToggleSelected: isSelectingEpisodes ? { withAnimation(Motion.quick) { toggleSelected(episode) } } : nil
+                )
             }
         }
     }
@@ -193,7 +283,11 @@ struct TitleDetailContent: View {
             if releases.isEmpty {
                 Text("No release dates listed").foregroundStyle(.secondary)
             } else {
-                sectionHeader("Releases")
+                HStack(spacing: 12) {
+                    Text("Releases").font(.headline)
+                    Spacer(minLength: 0)
+                    movieWatchedButton
+                }
                 ForEach(releases) { release in
                     HStack {
                         Image(systemName: "film")
@@ -211,6 +305,23 @@ struct TitleDetailContent: View {
                 }
             }
         }
+    }
+
+    /// Movies are watched as a whole, so the toggle sits on the section rather than a row.
+    private var movieWatchedButton: some View {
+        let watched = appState.library.isWatchedMovie(titleID)
+        return Button {
+            withAnimation(Motion.smooth) {
+                appState.setMovieWatched(!watched, titleID: titleID)
+            }
+        } label: {
+            Label(watched ? "Watched" : "Mark watched",
+                  systemImage: watched ? "checkmark.circle.fill" : "circle")
+                .font(.caption)
+                .foregroundStyle(watched ? Theme.accent : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(watched ? "Mark as unwatched" : "Mark as watched")
     }
 
     // MARK: - Cast

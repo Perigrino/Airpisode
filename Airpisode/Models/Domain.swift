@@ -67,6 +67,8 @@ struct Library: Codable {
     var entries: [WatchlistEntry] = []
     var watchedShows: Set<String> = []
     var watchedMovies: Set<String> = []
+    /// Episode IDs (`"100-s2e5"`) the user has marked watched.
+    var watchedEpisodes: Set<String> = []
     var episodes: [String: [Episode]] = [:]
     var movieReleases: [String: [MovieRelease]] = [:]
     var preferences = NotificationPreferences()
