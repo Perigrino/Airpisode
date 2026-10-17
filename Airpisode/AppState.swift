@@ -57,6 +57,20 @@ final class AppState: ObservableObject {
 
     // MARK: - Refresh
 
+    /// Fetches a title's metadata without adding it to the library (used by the detail page before "Add").
+    func fetchPreviewTitle(tmdbID: Int, mediaType: MediaType) async -> Title? {
+        do {
+            switch mediaType {
+            case .tv:
+                return TMDBMapper.title(from: try await tmdb.tvDetail(id: tmdbID))
+            case .movie:
+                return TMDBMapper.title(from: try await tmdb.movieDetail(id: tmdbID))
+            }
+        } catch {
+            return nil
+        }
+    }
+
     /// Refreshes every tracked title through the ReleaseEngine (staleness-tiered) and reschedules alerts.
     func runFullRefresh() async {
         let engine = ReleaseEngine(client: tmdb)

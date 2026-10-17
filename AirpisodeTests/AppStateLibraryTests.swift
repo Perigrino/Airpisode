@@ -69,6 +69,23 @@ final class AppStateLibraryTests: XCTestCase {
         XCTAssertEqual(stub.seasonCallNumbers, [1])
     }
 
+    func testFetchPreviewTitleReturnsMappedTitleWithoutAddingToLibrary() async {
+        let stub = StubTMDBClient()
+        stub.tvDetailResult = TMDBTVDetail(
+            id: 100, name: "Severance", overview: "innie", posterPath: nil, firstAirDate: "2022-02-18",
+            status: "Returning Series",
+            seasons: [TMDBSeasonSummary(seasonNumber: 1, episodeCount: 2, airDate: nil)]
+        )
+        let app = AppState(store: LibraryStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)), tmdb: stub)
+
+        let preview = await app.fetchPreviewTitle(tmdbID: 100, mediaType: .tv)
+
+        XCTAssertEqual(preview?.id, "tv-100")
+        XCTAssertEqual(preview?.name, "Severance")
+        XCTAssertTrue(app.library.entries.isEmpty, "preview must not add to library")
+        XCTAssertEqual(stub.tvDetailCallCount, 1)
+    }
+
     func testRunFullRefreshUpdatesStaleTitleAndReportsNoError() async {
         let stub = StubTMDBClient()
         stub.tvDetailResult = TMDBTVDetail(

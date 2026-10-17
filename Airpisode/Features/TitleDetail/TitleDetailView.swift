@@ -7,9 +7,11 @@ struct TitleDetailView: View {
 
     @EnvironmentObject private var appState: AppState
     @State private var selectedSeason: Int?
+    @State private var previewTitle: Title?
 
     private var titleID: String { "\(mediaType.rawValue)-\(tmdbID)" }
     private var title: Title? { appState.library.titles[titleID] }
+    private var displayTitle: Title? { title ?? previewTitle }
     private var isTracked: Bool { appState.library.entries.contains { $0.id == titleID } }
 
     var body: some View {
@@ -22,17 +24,29 @@ struct TitleDetailView: View {
                     } else {
                         movieReleaseList
                     }
+                } else if previewTitle == nil {
+                    HStack {
+                        Spacer()
+                        ProgressView().padding(.vertical, 40)
+                        Spacer()
+                    }
                 }
             }
             .padding()
         }
-        .navigationTitle(title?.name ?? name)
-        .task { await appState.refreshTitle(titleID) }
+        .navigationTitle(displayTitle?.name ?? name)
+        .task(id: titleID) {
+            if let title {
+                await appState.refreshTitle(titleID)
+            } else {
+                previewTitle = await appState.fetchPreviewTitle(tmdbID: tmdbID, mediaType: mediaType)
+            }
+        }
     }
 
     private var hero: some View {
         HStack(alignment: .top, spacing: 16) {
-            AsyncImage(url: ImageURL.poster(title?.posterPath, size: "w342")) { image in
+            AsyncImage(url: ImageURL.poster(displayTitle?.posterPath, size: "w342")) { image in
                 image.resizable().aspectRatio(contentMode: .fit)
             } placeholder: {
                 Color.gray.opacity(0.2)
@@ -41,25 +55,26 @@ struct TitleDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(title?.name ?? name)
+                Text(displayTitle?.name ?? name)
                     .font(.title2).bold()
-                if let status = title?.tvStatus {
+                if let status = displayTitle?.tvStatus {
                     Text(status).font(.caption).foregroundStyle(.secondary)
                 }
-                Text(title?.overview ?? "")
+                Text(displayTitle?.overview ?? "")
                     .font(.body)
                     .foregroundStyle(.secondary)
                 Button {
                     if isTracked {
                         appState.removeFromLibrary(titleID)
-                    } else if let title {
-                        appState.addToLibrary(title)
+                    } else if let t = displayTitle {
+                        appState.addToLibrary(t)
+                        Task { await appState.refreshTitle(titleID) }  // pull episodes/releases right after adding
                     }
                 } label: {
-                    Label(isTracked ? "Remove" : "Add to Library",
+                    Label(isTracked ? "Remove from Library" : "Add to Library",
                           systemImage: isTracked ? "minus.circle" : "plus.circle")
                 }
-                .disabled(title == nil)
+                .disabled(displayTitle == nil)
                 .padding(.top, 4)
             }
         }

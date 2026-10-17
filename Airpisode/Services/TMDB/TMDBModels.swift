@@ -82,6 +82,24 @@ struct TMDBMovieDetail: Decodable {
         case releaseDate = "release_date"
     }
 }
+struct TMDBRecommendationsResponse: Decodable {
+    let results: [TMDBRecommendation]
+}
+struct TMDBRecommendation: Decodable {
+    let id: Int
+    let name: String?                // tv
+    let title: String?               // movie
+    let overview: String?
+    let posterPath: String?
+    let firstAirDate: String?
+    let releaseDate: String?
+    enum CodingKeys: String, CodingKey {
+        case id, name, title, overview
+        case posterPath = "poster_path"
+        case firstAirDate = "first_air_date"
+        case releaseDate = "release_date"
+    }
+}
 struct TMDBReleaseDatesResponse: Decodable {
     let id: Int
     let results: [TMDBRegionReleases]
