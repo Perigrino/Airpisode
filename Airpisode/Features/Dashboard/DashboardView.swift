@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var justUpdated = false
 
     private var items: [UpcomingItem] { appState.library.upcomingReleases() }
 
@@ -27,10 +28,20 @@ struct DashboardView: View {
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.12)))
+                        .appear()
                 }
 
-                PageHeader(title: "Upcoming",
-                           subtitle: "Don't miss out on these upcoming releases")
+                HStack(alignment: .firstTextBaseline) {
+                    PageHeader(title: "Upcoming",
+                               subtitle: "Don't miss out on these upcoming releases")
+                    Spacer()
+                    if justUpdated {
+                        Label("Updated just now", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(Theme.accent)
+                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    }
+                }
 
                 if items.isEmpty {
                     emptyState
@@ -42,15 +53,26 @@ struct DashboardView: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(Motion.smooth, value: justUpdated)
         }
         .screenBackground()
         .navigationTitle("Upcoming")
         .toolbar {
             Button {
-                Task { await appState.runFullRefresh() }
+                Task {
+                    await appState.runFullRefresh()
+                    justUpdated = true
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    justUpdated = false
+                }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                if appState.isRefreshing {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
             }
+            .disabled(appState.isRefreshing)
             .help("Refresh release dates")
         }
     }
@@ -76,6 +98,7 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
+        .appear()
     }
 
     @ViewBuilder
@@ -87,6 +110,7 @@ struct DashboardView: View {
                     .fontWeight(.semibold)
                 ForEach(items) { item in
                     DashboardRowView(item: item)
+                        .hoverLift()
                 }
             }
         }

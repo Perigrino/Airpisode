@@ -46,7 +46,7 @@ struct MyShowsView: View {
             TitleRowView(title: title, nextLabel: nextLabel(for: title),
                          isExpanded: expandedID == title.id)
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(Motion.smooth) {
                         expandedID = expandedID == title.id ? nil : title.id
                     }
                 }
@@ -61,10 +61,12 @@ struct MyShowsView: View {
                 TitleDetailContent(tmdbID: title.tmdbID, mediaType: .tv, name: title.name)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .background(Theme.cardBackground(cornerRadius: 16))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .hoverLift()
     }
 
     private var emptyState: some View {
@@ -84,6 +86,7 @@ struct MyShowsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
+        .appear()
     }
 
     private func nextLabel(for title: Title) -> String? {

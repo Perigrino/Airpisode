@@ -11,10 +11,11 @@ enum ReleaseChange: Equatable {
 struct ReleaseEngine {
     let client: TMDBClientProtocol
 
-    func refreshIfNeeded(library: inout Library, now: Date) async -> [ReleaseChange] {
+    func refreshIfNeeded(library: inout Library, now: Date, force: Bool = false) async -> [ReleaseChange] {
         var changes: [ReleaseChange] = []
         for entry in library.entries where entry.isTrackingEnabled {
-            guard let title = library.titles[entry.id], !isFresh(title: title, library: library, now: now) else { continue }
+            guard let title = library.titles[entry.id] else { continue }
+            if !force, isFresh(title: title, library: library, now: now) { continue }
             let titleID = entry.id
             let previousRefreshed = title.lastRefreshed
             do {

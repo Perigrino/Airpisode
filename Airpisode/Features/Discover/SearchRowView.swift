@@ -8,15 +8,7 @@ struct SearchRowView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            AsyncImage(url: ImageURL.poster(result.posterPath, size: "w185")) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Theme.posterPlaceholder
-            }
-            .frame(width: 60, height: 90)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            PosterImage(path: result.posterPath, width: 60, height: 90, cornerRadius: 8)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(result.displayName)
@@ -45,6 +37,7 @@ struct SearchRowView: View {
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                .animation(Motion.quick, value: isExpanded)
         }
         .padding(12)
         .contentShape(Rectangle())

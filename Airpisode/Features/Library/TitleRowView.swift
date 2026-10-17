@@ -8,13 +8,7 @@ struct TitleRowView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            AsyncImage(url: ImageURL.poster(title.posterPath, size: "w185")) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Theme.posterPlaceholder
-            }
-            .frame(width: 76, height: 114)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            PosterImage(path: title.posterPath, width: 76, height: 114, cornerRadius: 10)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(title.name)
@@ -37,6 +31,7 @@ struct TitleRowView: View {
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                .animation(Motion.quick, value: isExpanded)
         }
         .padding(12)
         .contentShape(Rectangle())

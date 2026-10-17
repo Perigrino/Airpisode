@@ -100,7 +100,7 @@ struct DiscoverView: View {
         .searchable(text: $viewModel.query, prompt: "Search movies, shows, people…")
         .navigationTitle("Discover")
         .onChange(of: viewModel.query) { _ in
-            withAnimation(.easeInOut(duration: 0.15)) { expandedID = nil }
+            withAnimation(Motion.quick) { expandedID = nil }
         }
         .task(id: appState.library.entries.map(\.id).sorted().joined()) {
             await viewModel.loadRecommendations(library: appState.library)
@@ -117,13 +117,14 @@ struct DiscoverView: View {
         HStack(spacing: 8) {
             ForEach(DiscoverFilter.allCases, id: \.self) { option in
                 Button {
-                    withAnimation(.easeInOut(duration: 0.12)) { filter = option }
+                    withAnimation(Motion.smooth) { filter = option }
                 } label: {
                     Chip(text: option.rawValue, filled: filter == option)
                 }
                 .buttonStyle(.plain)
             }
         }
+        .animation(Motion.smooth, value: filter)
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -149,7 +150,7 @@ struct DiscoverView: View {
             SearchRowView(result: result, isExpanded: expandedID == id, isTracked: tracked)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(Motion.smooth) {
                         expandedID = expandedID == id ? nil : id
                     }
                 }
@@ -157,10 +158,12 @@ struct DiscoverView: View {
                 TitleDetailContent(tmdbID: result.id, mediaType: mediaType(of: result), name: result.displayName)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .background(Theme.cardBackground(cornerRadius: 16))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .hoverLift()
     }
 
     private func mediaType(of result: TMDBSearchResult) -> MediaType {
@@ -172,5 +175,6 @@ struct DiscoverView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 60)
+            .appear()
     }
 }

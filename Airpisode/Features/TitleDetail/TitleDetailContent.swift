@@ -53,13 +53,7 @@ struct TitleDetailContent: View {
 
     private var hero: some View {
         HStack(alignment: .top, spacing: 20) {
-            AsyncImage(url: ImageURL.poster(displayTitle?.posterPath, size: "w342")) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Theme.posterPlaceholder
-            }
-            .frame(width: 200, height: 300)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            PosterImage(path: displayTitle?.posterPath, size: "w342", width: 200, height: 300, cornerRadius: 12)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text(displayTitle?.name ?? name)
@@ -100,13 +94,14 @@ struct TitleDetailContent: View {
     private var watchlistButton: some View {
         Group {
             if isTracked {
-                Button {
+                Button(role: .destructive) {
                     appState.removeFromLibrary(titleID)
                 } label: {
                     Label("Remove from Watchlist", systemImage: "minus.circle")
-                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .tint(.red)
+                .controlSize(.regular)
             } else {
                 Button {
                     if let t = displayTitle {
@@ -115,10 +110,10 @@ struct TitleDetailContent: View {
                     }
                 } label: {
                     Label("Add to Watchlist", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
+                .controlSize(.regular)
             }
         }
         .disabled(displayTitle == nil)

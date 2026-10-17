@@ -10,6 +10,7 @@ enum Secrets {
 final class AppState: ObservableObject {
     @Published var library = Library()
     @Published var lastRefreshError: String?
+    @Published var isRefreshing = false
     @Published var selectedSection: SidebarSection? = .dashboard
 
     let tmdb: TMDBClientProtocol
@@ -77,11 +78,16 @@ final class AppState: ObservableObject {
         (try? await tmdb.credits(mediaType: mediaType, tmdbID: tmdbID)) ?? []
     }
 
-    /// Refreshes every tracked title through the ReleaseEngine (staleness-tiered) and reschedules alerts.
-    func runFullRefresh() async {
+    /// Refreshes tracked titles through the ReleaseEngine and reschedules alerts.
+    /// `force` bypasses the staleness TTL so a manual refresh always hits the network.
+    func runFullRefresh(force: Bool = true) async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        let started = Date()
+
         let engine = ReleaseEngine(client: tmdb)
         var snapshot = library
-        _ = await engine.refreshIfNeeded(library: &snapshot, now: .now)
+        _ = await engine.refreshIfNeeded(library: &snapshot, now: .now, force: force)
         library = snapshot
         try? await store.save(library)
         let failed = snapshot.entries.filter { snapshot.titles[$0.id]?.lastRefreshed == nil }.count
@@ -91,6 +97,13 @@ final class AppState: ObservableObject {
         for entry in snapshot.entries {
             reschedule(titleID: entry.id)
         }
+
+        // Keep the spinner visible long enough to read even when nothing was stale.
+        let elapsed = Date().timeIntervalSince(started)
+        if elapsed < 0.6 {
+            try? await Task.sleep(nanoseconds: UInt64((0.6 - elapsed) * 1_000_000_000))
+        }
+        isRefreshing = false
     }
 
     func refreshTitle(_ titleID: String) async {

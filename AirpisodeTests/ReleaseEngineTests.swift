@@ -43,6 +43,15 @@ final class ReleaseEngineTests: XCTestCase {
         XCTAssertTrue(changes.isEmpty)
     }
 
+    func testForceRefetchesFreshTitle() async {
+        // Same fresh library as above, but a manual refresh forces the fetch past the TTL.
+        var lib = makeLibrary(lastRefreshed: now.addingTimeInterval(-3600), oldAirDate: "2026-10-20")
+        let stub = stubWithSeason(airDate: "2026-10-20")
+        _ = await ReleaseEngine(client: stub).refreshIfNeeded(library: &lib, now: now, force: true)
+        XCTAssertEqual(stub.tvDetailCallCount, 1)
+        XCTAssertEqual(lib.titles["tv-100"]?.lastRefreshed, now)
+    }
+
     func testStaleTitleRefetchedAndLastRefreshedUpdated() async {
         // 7h ago exceeds the 6h TTL for a near-term release.
         var lib = makeLibrary(lastRefreshed: now.addingTimeInterval(-7 * 3600), oldAirDate: "2026-10-20")

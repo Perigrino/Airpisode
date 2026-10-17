@@ -11,13 +11,7 @@ struct DashboardRowView: View {
                 .background(Theme.gradient)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            AsyncImage(url: ImageURL.poster(item.title.posterPath, size: "w185")) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Theme.posterPlaceholder
-            }
-            .frame(width: 52, height: 78)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            PosterImage(path: item.title.posterPath, width: 52, height: 78, cornerRadius: 8)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title.name)
