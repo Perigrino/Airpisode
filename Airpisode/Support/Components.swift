@@ -56,12 +56,22 @@ struct CountdownText: View {
         let minutes = Int(seconds / 60)
         let hours = minutes / 60
         let days = hours / 24
-        if minutes < 60 { return "\(max(minutes,1))\nMin" }
-        if hours < 24 { return "\(hours)\nHours" }
-        if days < 7 { return "\(days)\nDays" }
-        if days < 30 { return "\(days / 7)\nWeeks" }
-        if days < 365 { return "\(days / 30)\nMonths" }
-        return "\(days / 365)\nYear"
+        if minutes < 60 {
+            let m = max(minutes, 1)
+            return "\(m)\n\(m == 1 ? "Min" : "Mins")"
+        }
+        if hours < 24 { return "\(hours)\n\(hours == 1 ? "Hour" : "Hours")" }
+        if days < 7 { return "\(days)\n\(days == 1 ? "Day" : "Days")" }
+        if days < 30 {
+            let w = days / 7
+            return "\(w)\n\(w == 1 ? "Week" : "Weeks")"
+        }
+        if days < 365 {
+            let mo = days / 30
+            return "\(mo)\n\(mo == 1 ? "Month" : "Months")"
+        }
+        let y = days / 365
+        return "\(y)\n\(y == 1 ? "Year" : "Years")"
     }
 }
 

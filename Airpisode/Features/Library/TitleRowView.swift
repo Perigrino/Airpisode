@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Plain row content (no background/padding of its own) — the hosting card supplies those.
 struct TitleRowView: View {
     let title: Title
     let nextLabel: String?
@@ -10,28 +11,34 @@ struct TitleRowView: View {
             AsyncImage(url: ImageURL.poster(title.posterPath, size: "w185")) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
-                Color.gray.opacity(0.2)
+                Theme.posterPlaceholder
             }
             .frame(width: 76, height: 114)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title.name)
                     .font(.title3)
                     .fontWeight(.semibold)
+                    .lineLimit(2)
+                Chip(text: title.mediaType == .tv ? "TV Show" : "Movie")
                 if let nextLabel {
-                    Text(nextLabel)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 5) {
+                        Image(systemName: "clock")
+                        Text(nextLabel)
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 }
             }
-            Spacer()
+            Spacer(minLength: 0)
             Image(systemName: "chevron.down")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
         }
-        .padding(.vertical, 6)
+        .padding(12)
         .contentShape(Rectangle())
     }
 }

@@ -12,44 +12,24 @@ struct MyMoviesView: View {
     }
 
     var body: some View {
-        Group {
-            if movies.isEmpty {
-                VStack(spacing: 12) {
-                    Text("No movies yet")
-                        .foregroundStyle(.secondary)
-                    Button {
-                        appState.selectedSection = .discover
-                    } label: {
-                        Label("Find Movies in Discover", systemImage: "plus.circle")
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                PageHeader(title: "My Movies",
+                           subtitle: movies.isEmpty ? "Track your first movie from Discover"
+                                                    : "\(movies.count) movie\(movies.count == 1 ? "" : "s") tracked")
+                if movies.isEmpty {
+                    emptyState
+                } else {
+                    ForEach(movies) { title in
+                        card(title)
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List(movies) { title in
-                    TitleRowView(title: title, nextLabel: nextLabel(for: title),
-                                 isExpanded: expandedID == title.id)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                expandedID = expandedID == title.id ? nil : title.id
-                            }
-                        }
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                appState.removeFromLibrary(title.id)
-                            } label: {
-                                Label("Remove", systemImage: "trash")
-                            }
-                        }
-                    if expandedID == title.id {
-                        TitleDetailContent(tmdbID: title.tmdbID, mediaType: .movie, name: title.name)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                }
-                .listStyle(.inset)
             }
+            .padding(24)
+            .frame(maxWidth: 820, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .screenBackground()
         .navigationTitle("My Movies")
         .toolbar {
             Button {
@@ -59,6 +39,52 @@ struct MyMoviesView: View {
             }
             .help("Find a movie in Discover")
         }
+    }
+
+    @ViewBuilder
+    private func card(_ title: Title) -> some View {
+        VStack(spacing: 0) {
+            TitleRowView(title: title, nextLabel: nextLabel(for: title),
+                         isExpanded: expandedID == title.id)
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        expandedID = expandedID == title.id ? nil : title.id
+                    }
+                }
+                .contextMenu {
+                    Button(role: .destructive) {
+                        appState.removeFromLibrary(title.id)
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
+            if expandedID == title.id {
+                TitleDetailContent(tmdbID: title.tmdbID, mediaType: .movie, name: title.name)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+            }
+        }
+        .background(Theme.cardBackground(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "film")
+                .font(.system(size: 40))
+                .foregroundStyle(.tertiary)
+            Text("No movies yet")
+                .font(.headline)
+            Button {
+                appState.selectedSection = .discover
+            } label: {
+                Label("Find Movies in Discover", systemImage: "plus.circle")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
 
     private func nextLabel(for title: Title) -> String? {

@@ -4,48 +4,50 @@ struct DashboardRowView: View {
     let item: UpcomingItem
 
     var body: some View {
-        HStack(spacing: 10) {
-            AsyncImage(url: ImageURL.poster(item.title.posterPath)) { image in
+        HStack(spacing: 14) {
+            // Hobi-style countdown rail badge: the relative time lives on the gradient chip.
+            CountdownText(date: item.date)
+                .frame(width: 62, height: 62)
+                .background(Theme.gradient)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            AsyncImage(url: ImageURL.poster(item.title.posterPath, size: "w185")) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
-                Color.gray.opacity(0.2)
+                Theme.posterPlaceholder
             }
-            .frame(width: 40, height: 60)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .frame(width: 52, height: 78)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.title.name)
-                    .fontWeight(.medium)
-                Text(item.label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                // Date-only releases show the day only; timed ones show a clock time.
-                Text(dateLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if !item.isTimed {
-                    Text("No time announced")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    .font(.headline)
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Image(systemName: item.title.mediaType == .tv ? "tv" : "film")
+                    Text(item.label)
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                HStack(spacing: 5) {
+                    Image(systemName: "clock")
+                    Text(dateLabel)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
             }
+
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(12)
+        .background(Theme.cardBackground(cornerRadius: 16))
     }
 
     private var dateLabel: String {
         guard let date = item.date else { return "TBD" }
         let formatter = DateFormatter()
-        if item.isTimed {
-            formatter.dateFormat = "MMM d 'at' HH:mm"
-        } else {
-            formatter.dateFormat = "MMM d"
-        }
+        formatter.dateFormat = item.isTimed ? "MMM d, HH:mm" : "MMM d, yyyy"
         return formatter.string(from: date)
     }
 }

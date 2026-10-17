@@ -25,6 +25,25 @@ enum Theme {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(card)
     }
+
+    /// Placeholder tint shown while a poster loads.
+    static var posterPlaceholder: some View {
+        Color.white.opacity(0.06)
+    }
+}
+
+/// Page canvas: near-black background behind scroll content.
+struct ScreenBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        ZStack {
+            Theme.background.ignoresSafeArea()
+            content
+        }
+    }
+}
+
+extension View {
+    func screenBackground() -> some View { modifier(ScreenBackground()) }
 }
 
 

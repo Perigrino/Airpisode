@@ -11,9 +11,15 @@ struct AirpisodeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     var body: some Scene {
         WindowGroup("Airpisode") {
-            RootView().environmentObject(appState)
+            RootView()
+                .environmentObject(appState)
+                .preferredColorScheme(.dark)
         }
-        Settings { SettingsView().environmentObject(appState) }
+        Settings {
+            SettingsView()
+                .environmentObject(appState)
+                .preferredColorScheme(.dark)
+        }
     }
 }
 
@@ -38,31 +44,33 @@ struct RootView: View {
     var body: some View {
         NavigationView {
             List(selection: $appState.selectedSection) {
-                NavigationLink(tag: SidebarSection.dashboard, selection: $appState.selectedSection) {
-                    DashboardView()
-                } label: {
-                    Text("Dashboard")
-                }
-                NavigationLink(tag: SidebarSection.shows, selection: $appState.selectedSection) {
-                    MyShowsView()
-                } label: {
-                    Text("My Shows")
-                }
-                NavigationLink(tag: SidebarSection.movies, selection: $appState.selectedSection) {
-                    MyMoviesView()
-                } label: {
-                    Text("My Movies")
-                }
-                NavigationLink(tag: SidebarSection.discover, selection: $appState.selectedSection) {
-                    DiscoverView()
-                } label: {
-                    Text("Discover")
-                }
+                link(.dashboard, "Upcoming", "sparkles")
+                link(.shows, "My Shows", "tv")
+                link(.movies, "My Movies", "film")
+                link(.discover, "Discover", "magnifyingglass")
             }
             .listStyle(.sidebar)
-            .frame(minWidth: 180)
+            .frame(minWidth: 190)
             DashboardView()
         }
         .task { await appState.loadLibrary() }
+    }
+
+    private func link(_ section: SidebarSection, _ title: String, _ icon: String) -> some View {
+        NavigationLink(tag: section, selection: $appState.selectedSection) {
+            destination(for: section)
+        } label: {
+            Label(title, systemImage: icon)
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for section: SidebarSection) -> some View {
+        switch section {
+        case .dashboard: DashboardView()
+        case .shows: MyShowsView()
+        case .movies: MyMoviesView()
+        case .discover: DiscoverView()
+        }
     }
 }

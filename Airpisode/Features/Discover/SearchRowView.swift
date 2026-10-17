@@ -1,8 +1,10 @@
 import SwiftUI
 
+/// Plain row content (no background) — the hosting card supplies the surface.
 struct SearchRowView: View {
     let result: TMDBSearchResult
     var isExpanded = false
+    var isTracked = false
 
     var body: some View {
         HStack(spacing: 14) {
@@ -11,34 +13,41 @@ struct SearchRowView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } placeholder: {
-                Color.gray.opacity(0.2)
+                Theme.posterPlaceholder
             }
             .frame(width: 60, height: 90)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(result.displayName)
                     .font(.title3)
                     .fontWeight(.semibold)
-                Text(year)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Chip(text: result.mediaType == "tv" ? "TV Show" : "Movie")
+                    if !year.isEmpty {
+                        Text(year)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Text(result.mediaType == "tv" ? "TV" : "Movie")
-                .font(.caption)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+            if isTracked {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(Theme.accent)
+            }
 
             Image(systemName: "chevron.down")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
         }
-        .padding(.vertical, 4)
+        .padding(12)
+        .contentShape(Rectangle())
     }
 
     private var year: String {

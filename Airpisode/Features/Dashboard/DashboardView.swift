@@ -18,31 +18,34 @@ struct DashboardView: View {
     } }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let error = appState.lastRefreshError {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .padding(6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.orange.opacity(0.1))
-            }
-            Group {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                if let error = appState.lastRefreshError {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.12)))
+                }
+
+                PageHeader(title: "Upcoming",
+                           subtitle: "Don't miss out on these upcoming releases")
+
                 if items.isEmpty {
-                    Text("Add your first show in Discover")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    emptyState
                 } else {
-                    List {
-                        section("Today", today)
-                        section("This Week", thisWeek)
-                        section("Later", later)
-                    }
-                    .listStyle(.inset)
+                    section("Today", today)
+                    section("This Week", thisWeek)
+                    section("Later", later)
                 }
             }
+            .padding(24)
+            .frame(maxWidth: 820, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .navigationTitle("Dashboard")
+        .screenBackground()
+        .navigationTitle("Upcoming")
         .toolbar {
             Button {
                 Task { await appState.runFullRefresh() }
@@ -53,10 +56,36 @@ struct DashboardView: View {
         }
     }
 
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "calendar.badge.plus")
+                .font(.system(size: 40))
+                .foregroundStyle(.tertiary)
+            Text("Nothing on the calendar yet")
+                .font(.headline)
+            Text("Track a show or movie and its next release shows up here.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Button {
+                appState.selectedSection = .discover
+            } label: {
+                Label("Find something to track", systemImage: "magnifyingglass")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accent)
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+    }
+
     @ViewBuilder
     private func section(_ name: String, _ items: [UpcomingItem]) -> some View {
         if !items.isEmpty {
-            Section(name) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(name)
+                    .font(.title3)
+                    .fontWeight(.semibold)
                 ForEach(items) { item in
                     DashboardRowView(item: item)
                 }

@@ -49,44 +49,56 @@ final class DiscoverViewModel: ObservableObject {
     }
 }
 
+enum DiscoverFilter: String, CaseIterable {
+    case all = "Best Match"
+    case tv = "TV Shows"
+    case movies = "Movies"
+}
+
 struct DiscoverView: View {
     @StateObject private var viewModel: DiscoverViewModel
     @EnvironmentObject private var appState: AppState
     @State private var expandedID: String?
+    @State private var filter: DiscoverFilter = .all
 
     init(client: TMDBClientProtocol = TMDBClient(apiKey: Secrets.tmdbKey)) {
         _viewModel = StateObject(wrappedValue: DiscoverViewModel(client: client))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                if viewModel.recommendations.isEmpty {
-                    placeholder(appState.library.entries.isEmpty
-                                ? "Search for a show or movie"
-                                : "No recommendations yet")
-                } else {
-                    List {
-                        Section("Because you're tracking…") {
-                            ForEach(viewModel.recommendations) { result in
-                                discoverRow(result)
-                            }
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                PageHeader(title: "Discover",
+                           subtitle: "Find your next favorite show or movie")
+                filterChips
+
+                if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if viewModel.recommendations.isEmpty {
+                        placeholder(appState.library.entries.isEmpty
+                                    ? "Search for a show or movie"
+                                    : "No recommendations yet")
+                    } else {
+                        sectionTitle("Because you're tracking…")
+                        ForEach(filtered(viewModel.recommendations)) { result in
+                            discoverRow(result)
                         }
                     }
-                    .listStyle(.inset)
+                } else if let error = viewModel.errorMessage {
+                    placeholder(error)
+                } else if viewModel.results.isEmpty && !viewModel.isSearching {
+                    placeholder("No results")
+                } else {
+                    ForEach(filtered(viewModel.results)) { result in
+                        discoverRow(result)
+                    }
                 }
-            } else if let error = viewModel.errorMessage {
-                placeholder(error)
-            } else if viewModel.results.isEmpty && !viewModel.isSearching {
-                placeholder("No results")
-            } else {
-                List(viewModel.results) { result in
-                    discoverRow(result)
-                }
-                .listStyle(.inset)
             }
+            .padding(24)
+            .frame(maxWidth: 820, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .searchable(text: $viewModel.query, prompt: "Title, show, or movie")
+        .screenBackground()
+        .searchable(text: $viewModel.query, prompt: "Search movies, shows, people…")
         .navigationTitle("Discover")
         .onChange(of: viewModel.query) { _ in
             withAnimation(.easeInOut(duration: 0.15)) { expandedID = nil }
@@ -102,10 +114,40 @@ struct DiscoverView: View {
         }
     }
 
+    private var filterChips: some View {
+        HStack(spacing: 8) {
+            ForEach(DiscoverFilter.allCases, id: \.self) { option in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.12)) { filter = option }
+                } label: {
+                    Chip(text: option.rawValue, filled: filter == option)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.title3)
+            .fontWeight(.semibold)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+    }
+
+    private func filtered(_ results: [TMDBSearchResult]) -> [TMDBSearchResult] {
+        switch filter {
+        case .all: return results
+        case .tv: return results.filter { $0.mediaType == "tv" }
+        case .movies: return results.filter { $0.mediaType == "movie" }
+        }
+    }
+
     private func discoverRow(_ result: TMDBSearchResult) -> some View {
         let id = "\(mediaType(of: result).rawValue)-\(result.id)"
-        return Group {
-            SearchRowView(result: result, isExpanded: expandedID == id)
+        let tracked = appState.library.entries.contains { $0.id == id }
+        return VStack(spacing: 0) {
+            SearchRowView(result: result, isExpanded: expandedID == id, isTracked: tracked)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     withAnimation(.easeInOut(duration: 0.15)) {
@@ -114,10 +156,12 @@ struct DiscoverView: View {
                 }
             if expandedID == id {
                 TitleDetailContent(tmdbID: result.id, mediaType: mediaType(of: result), name: result.displayName)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
             }
         }
+        .background(Theme.cardBackground(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func mediaType(of result: TMDBSearchResult) -> MediaType {
@@ -127,6 +171,7 @@ struct DiscoverView: View {
     private func placeholder(_ text: String) -> some View {
         Text(text)
             .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 60)
     }
 }
