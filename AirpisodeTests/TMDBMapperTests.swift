@@ -54,6 +54,21 @@ final class TMDBMapperTests: XCTestCase {
         XCTAssertEqual(rel[0].region, "US")
     }
 
+    func testMovieReleaseDedupesRepeatedTypesKeepingUpcoming() {
+        // TMDB lists two TV windows; both share the same id (kind+region).
+        let now = TMDBMapper.parseDate("2026-10-17")!
+        let resp = TMDBReleaseDatesResponse(id: 1, results: [
+            TMDBRegionReleases(iso3166_1: "US", releaseDates: [
+                TMDBReleaseDate(certification: nil, releaseDate: "2026-10-13T00:00:00.000Z", type: 4), // past
+                TMDBReleaseDate(certification: nil, releaseDate: "2026-11-27T00:00:00.000Z", type: 4), // upcoming
+            ])
+        ])
+        let rel = TMDBMapper.movieReleases(resp, movieID: 1, region: "US", now: now)
+        XCTAssertEqual(rel.count, 1)
+        XCTAssertEqual(rel[0].kind, .tv)
+        XCTAssertEqual(rel[0].date, TMDBMapper.parseDateTime("2026-11-27T00:00:00.000Z"))
+    }
+
     func testEpisodeMapping() {
         let season = TMDBSeason(seasonNumber: 2, episodes: [
             TMDBTVEpisode(episodeNumber: 1, seasonNumber: 2, name: "Good News About Hell",

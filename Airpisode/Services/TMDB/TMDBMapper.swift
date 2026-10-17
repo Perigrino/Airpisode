@@ -47,10 +47,15 @@ enum TMDBMapper {
         }
     }
 
-    static func movieReleases(_ response: TMDBReleaseDatesResponse, movieID: Int, region: String) -> [MovieRelease] {
+    /// Maps a movie's release dates for `region`. TMDB can list several dates of the
+    /// same type in one region (e.g. two TV windows), which would collide on `id`, so
+    /// keep one per kind: the next upcoming date, else the most recent one.
+    static func movieReleases(_ response: TMDBReleaseDatesResponse, movieID: Int, region: String, now: Date = .now) -> [MovieRelease] {
         guard let regionEntry = response.results.first(where: { $0.iso3166_1 == region }) else { return [] }
-        return regionEntry.releaseDates.compactMap { entry -> MovieRelease? in
-            guard let kind = kind(from: entry.type) else { return nil }
+        var order: [String] = []
+        var chosen: [String: MovieRelease] = [:]
+        for entry in regionEntry.releaseDates {
+            guard let kind = kind(from: entry.type) else { continue }
             let date: Date?
             let hasTime: Bool
             if let dt = parseDateTime(entry.releaseDate) {
@@ -58,10 +63,29 @@ enum TMDBMapper {
             } else if let d = parseDate(entry.releaseDate) {
                 date = d; hasTime = false
             } else {
-                return nil
+                continue
             }
-            return MovieRelease(tmdbID: movieID, kind: kind, region: region, date: date, hasTime: hasTime)
+            let release = MovieRelease(tmdbID: movieID, kind: kind, region: region, date: date, hasTime: hasTime)
+            if let existing = chosen[release.id] {
+                chosen[release.id] = pick(existing, release, now: now)
+            } else {
+                chosen[release.id] = release
+                order.append(release.id)
+            }
         }
+        return order.compactMap { chosen[$0] }
+    }
+
+    /// Prefers the earliest date at or after `now`; otherwise the most recent date.
+    private static func pick(_ a: MovieRelease, _ b: MovieRelease, now: Date) -> MovieRelease {
+        func rank(_ r: MovieRelease) -> (bucket: Int, date: Date) {
+            guard let d = r.date else { return (2, .distantPast) }
+            return d >= now ? (0, d) : (1, d)
+        }
+        let ra = rank(a), rb = rank(b)
+        if ra.bucket != rb.bucket { return ra.bucket < rb.bucket ? a : b }
+        // Upcoming: earliest wins. Past/undated: latest wins.
+        return ra.bucket == 1 ? (ra.date >= rb.date ? a : b) : (ra.date <= rb.date ? a : b)
     }
 
     private static func kind(from type: Int) -> ReleaseKind? {

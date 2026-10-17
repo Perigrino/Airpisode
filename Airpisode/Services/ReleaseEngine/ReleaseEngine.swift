@@ -89,7 +89,10 @@ struct ReleaseEngine {
         id: (Item) -> String, date: (Item) -> Date?, hasTime: (Item) -> Bool
     ) -> [ReleaseChange] {
         var changes: [ReleaseChange] = []
-        let oldByID = Dictionary(uniqueKeysWithValues: old.map { (id($0), $0) })
+        // TMDB can report several dates of the same type in a region, so `old` may
+        // contain duplicate ids. Build the lookup defensively rather than trapping.
+        var oldByID: [String: Item] = [:]
+        for item in old { oldByID[id(item)] = item }
         for item in new {
             let key = id(item)
             if let prev = oldByID[key] {

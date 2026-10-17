@@ -52,6 +52,30 @@ final class ReleaseEngineTests: XCTestCase {
         XCTAssertEqual(lib.titles["tv-100"]?.lastRefreshed, now)
     }
 
+    func testDuplicateStoredReleasesDoNotCrashAndGetDeduped() async {
+        // Regression: TMDB can report several dates of one type in a region, so a stored
+        // library may hold duplicate ids. Diffing must not trap, and the refresh dedupes.
+        var lib = Library()
+        var title = TMDBMapper.title(from: TMDBMovieDetail(id: 200, title: "Dune", overview: nil, posterPath: nil, releaseDate: nil))
+        title.lastRefreshed = now.addingTimeInterval(-30 * 86_400)
+        lib.titles["movie-200"] = title
+        lib.entries = [WatchlistEntry(tmdbID: 200, mediaType: .movie, addedAt: now, isTrackingEnabled: true)]
+        lib.movieReleases["movie-200"] = [
+            MovieRelease(tmdbID: 200, kind: .tv, region: "US", date: TMDBMapper.parseDate("2026-10-13"), hasTime: true),
+            MovieRelease(tmdbID: 200, kind: .tv, region: "US", date: TMDBMapper.parseDate("2026-11-27"), hasTime: true),
+        ]
+        let stub = StubTMDBClient()
+        stub.movieDetailResult = TMDBMovieDetail(id: 200, title: "Dune", overview: nil, posterPath: nil, releaseDate: nil)
+        stub.releaseDatesResult = TMDBReleaseDatesResponse(id: 200, results: [
+            TMDBRegionReleases(iso3166_1: "US", releaseDates: [
+                TMDBReleaseDate(certification: nil, releaseDate: "2026-10-13T00:00:00.000Z", type: 4),
+                TMDBReleaseDate(certification: nil, releaseDate: "2026-11-27T00:00:00.000Z", type: 4),
+            ])
+        ])
+        _ = await ReleaseEngine(client: stub).refreshIfNeeded(library: &lib, now: now, force: true)
+        XCTAssertEqual(lib.movieReleases["movie-200"]?.count, 1)
+    }
+
     func testStaleTitleRefetchedAndLastRefreshedUpdated() async {
         // 7h ago exceeds the 6h TTL for a near-term release.
         var lib = makeLibrary(lastRefreshed: now.addingTimeInterval(-7 * 3600), oldAirDate: "2026-10-20")
