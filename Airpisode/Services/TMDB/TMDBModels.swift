@@ -13,13 +13,20 @@ struct TMDBSearchResult: Decodable, Identifiable {
     let posterPath: String?
     let firstAirDate: String?        // tv "YYYY-MM-DD"
     let releaseDate: String?         // movie
+    var popularity: Double? = nil
+    var voteAverage: Double? = nil
+    var voteCount: Int? = nil
     var displayName: String { name ?? title ?? "" }
+    /// Identity across media types — a movie and a tv can share a TMDB id.
+    var uniqueID: String { "\(mediaType)-\(id)" }
     enum CodingKeys: String, CodingKey {
-        case id, name, title, overview
+        case id, name, title, overview, popularity
         case mediaType = "media_type"
         case posterPath = "poster_path"
         case firstAirDate = "first_air_date"
         case releaseDate = "release_date"
+        case voteAverage = "vote_average"
+        case voteCount = "vote_count"
     }
 }
 
@@ -93,11 +100,16 @@ struct TMDBRecommendation: Decodable {
     let posterPath: String?
     let firstAirDate: String?
     let releaseDate: String?
+    var popularity: Double? = nil
+    var voteAverage: Double? = nil
+    var voteCount: Int? = nil
     enum CodingKeys: String, CodingKey {
-        case id, name, title, overview
+        case id, name, title, overview, popularity
         case posterPath = "poster_path"
         case firstAirDate = "first_air_date"
         case releaseDate = "release_date"
+        case voteAverage = "vote_average"
+        case voteCount = "vote_count"
     }
 }
 struct TMDBCreditsResponse: Decodable {

@@ -14,7 +14,13 @@ final class StubTMDBClient: TMDBClientProtocol, @unchecked Sendable {
     var seasonCallNumbers: [Int] = []
     var similarTitles: [String: [TMDBSearchResult]] = [:]  // key "tv-123"
     var similarRequests: [String] = []
+    var recommendationTitles: [String: [TMDBSearchResult]] = [:]
+    var recommendationRequests: [String] = []
     var creditsResult: [TMDBCastMember] = []
+
+    /// `recommendations`/`similar` are called concurrently by RecommendationEngine's task group,
+    /// so recorded requests need a lock or appends get lost.
+    private let lock = NSLock()
 
     func searchMulti(query: String) async throws -> [TMDBSearchResult] {
         lastQuery = query
@@ -46,11 +52,21 @@ final class StubTMDBClient: TMDBClientProtocol, @unchecked Sendable {
 
     func similar(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {
         let key = "\(mediaType.rawValue)-\(tmdbID)"
+        lock.lock()
         similarRequests.append(key)
+        lock.unlock()
         return similarTitles[key] ?? []
     }
 
     func credits(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBCastMember] {
         creditsResult
+    }
+
+    func recommendations(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {
+        let key = "\(mediaType.rawValue)-\(tmdbID)"
+        lock.lock()
+        recommendationRequests.append(key)
+        lock.unlock()
+        return recommendationTitles[key] ?? []
     }
 }

@@ -5,6 +5,7 @@ final class DiscoverViewModel: ObservableObject {
     @Published var query = ""
     @Published var results: [TMDBSearchResult] = []
     @Published var recommendations: [TMDBSearchResult] = []
+    @Published var recommendationReason: String?
     @Published var isSearching = false
     @Published var errorMessage: String?
 
@@ -35,17 +36,16 @@ final class DiscoverViewModel: ObservableObject {
         isSearching = false
     }
 
-    /// "Because you're tracking…": titles most similar to the most recently added tracked title.
+    /// Blends several tracked titles into a ranked suggestion list.
     func loadRecommendations(library: Library) async {
-        guard let seed = library.entries.max(by: { $0.addedAt < $1.addedAt }) else {
-            recommendations = []
-            return
-        }
-        guard let recs = try? await client.similar(mediaType: seed.mediaType, tmdbID: seed.tmdbID) else {
-            recommendations = []
-            return
-        }
-        recommendations = Array(recs.prefix(6))
+        let suggestion = await RecommendationEngine(client: client).suggestions(for: library)
+        recommendations = suggestion.items
+        recommendationReason = Self.reason(for: suggestion.seedNames)
+    }
+
+    private static func reason(for seeds: [String]) -> String? {
+        guard let first = seeds.first else { return nil }
+        return seeds.count == 1 ? "Because you're tracking \(first)" : "Based on your watchlist"
     }
 }
 
@@ -66,41 +66,49 @@ struct DiscoverView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                PageHeader(title: "Discover",
-                           subtitle: "Find your next favorite show or movie")
-                filterChips
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    PageHeader(title: "Discover",
+                               subtitle: "Find your next favorite show or movie")
+                    filterChips
 
-                if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    if viewModel.recommendations.isEmpty {
-                        placeholder(appState.library.entries.isEmpty
-                                    ? "Search for a show or movie"
-                                    : "No recommendations yet")
+                    if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if viewModel.recommendations.isEmpty {
+                            placeholder(appState.library.entries.isEmpty
+                                        ? "Search for a show or movie"
+                                        : "No recommendations yet")
+                        } else {
+                            sectionTitle(viewModel.recommendationReason ?? "Because you're tracking…")
+                            ForEach(filtered(viewModel.recommendations), id: \.uniqueID) { result in
+                                discoverRow(result).id(rowID(result))
+                            }
+                        }
+                    } else if let error = viewModel.errorMessage {
+                        placeholder(error)
+                    } else if viewModel.results.isEmpty && viewModel.isSearching {
+                        ForEach(0..<4, id: \.self) { _ in
+                            SkeletonRow()
+                        }
+                    } else if viewModel.results.isEmpty {
+                        placeholder("No results")
                     } else {
-                        sectionTitle("Because you're tracking…")
-                        ForEach(filtered(viewModel.recommendations)) { result in
-                            discoverRow(result)
+                        ForEach(filtered(viewModel.results), id: \.uniqueID) { result in
+                            discoverRow(result).id(rowID(result))
                         }
                     }
-                } else if let error = viewModel.errorMessage {
-                    placeholder(error)
-                } else if viewModel.results.isEmpty && viewModel.isSearching {
-                    ForEach(0..<4, id: \.self) { _ in
-                        SkeletonRow()
-                    }
-                } else if viewModel.results.isEmpty {
-                    placeholder("No results")
-                } else {
-                    ForEach(filtered(viewModel.results)) { result in
-                        discoverRow(result)
-                    }
                 }
+                .padding(24)
+                .padding(.bottom, DockBar.contentInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .screenBackground()
+            // Snap the expanded card to the top so its details are fully in view.
+            .onChange(of: expandedID) { newValue in
+                guard let id = newValue else { return }
+                withAnimation(Motion.smooth) { proxy.scrollTo(id, anchor: .top) }
+            }
         }
-        .screenBackground()
         .searchable(text: $viewModel.query, prompt: "Search movies, shows, people…")
         .navigationTitle("Discover")
         .onChange(of: viewModel.query) { _ in
@@ -115,6 +123,10 @@ struct DiscoverView: View {
             guard !Task.isCancelled else { return }
             await viewModel.search()
         }
+    }
+
+    private func rowID(_ result: TMDBSearchResult) -> String {
+        "\(mediaType(of: result).rawValue)-\(result.id)"
     }
 
     private var filterChips: some View {

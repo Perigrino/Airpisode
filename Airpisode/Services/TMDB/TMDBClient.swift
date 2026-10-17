@@ -7,6 +7,7 @@ protocol TMDBClientProtocol: Sendable {
     func movieDetail(id: Int) async throws -> TMDBMovieDetail
     func movieReleaseDates(id: Int) async throws -> TMDBReleaseDatesResponse
     func similar(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult]
+    func recommendations(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult]
     func credits(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBCastMember]
 }
 
@@ -47,16 +48,24 @@ struct TMDBClient: TMDBClientProtocol {
     func movieReleaseDates(id: Int) async throws -> TMDBReleaseDatesResponse {
         try await get("movie/\(id)/release_dates")
     }
-    func similar(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {
-        let page: TMDBRecommendationsResponse = try await get("\(mediaType.rawValue)/\(tmdbID)/similar")
-        // This endpoint omits media_type; inject it from the request context.
-        return page.results.map {
+    /// `/similar` and `/recommendations` share a response shape, and both omit media_type.
+    private func mapped(_ page: TMDBRecommendationsResponse, mediaType: MediaType) -> [TMDBSearchResult] {
+        page.results.map {
             TMDBSearchResult(
                 id: $0.id, mediaType: mediaType.rawValue, name: $0.name, title: $0.title,
                 overview: $0.overview, posterPath: $0.posterPath,
-                firstAirDate: $0.firstAirDate, releaseDate: $0.releaseDate
+                firstAirDate: $0.firstAirDate, releaseDate: $0.releaseDate,
+                popularity: $0.popularity, voteAverage: $0.voteAverage, voteCount: $0.voteCount
             )
         }
+    }
+    func similar(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {
+        let page: TMDBRecommendationsResponse = try await get("\(mediaType.rawValue)/\(tmdbID)/similar")
+        return mapped(page, mediaType: mediaType)
+    }
+    func recommendations(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {
+        let page: TMDBRecommendationsResponse = try await get("\(mediaType.rawValue)/\(tmdbID)/recommendations")
+        return mapped(page, mediaType: mediaType)
     }
     func credits(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBCastMember] {
         let page: TMDBCreditsResponse = try await get("\(mediaType.rawValue)/\(tmdbID)/credits")
