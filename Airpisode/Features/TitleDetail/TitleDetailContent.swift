@@ -1,6 +1,8 @@
 import SwiftUI
 
-struct TitleDetailView: View {
+/// Inline detail content: embedded directly in lists, expanded/collapsed per row.
+/// No outer ScrollView — the hosting list provides scrolling.
+struct TitleDetailContent: View {
     let tmdbID: Int
     let mediaType: MediaType
     let name: String
@@ -16,29 +18,26 @@ struct TitleDetailView: View {
     private var isTracked: Bool { appState.library.entries.contains { $0.id == titleID } }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                hero
-                if let title {
-                    if mediaType == .tv {
-                        tvEpisodeList(for: title)
-                    } else {
-                        movieReleaseList
-                    }
-                } else if previewTitle == nil {
-                    HStack {
-                        Spacer()
-                        ProgressView().padding(.vertical, 40)
-                        Spacer()
-                    }
+        VStack(alignment: .leading, spacing: 16) {
+            hero
+            if let title {
+                if mediaType == .tv {
+                    tvEpisodeList(for: title)
+                } else {
+                    movieReleaseList
                 }
-                if !cast.isEmpty {
-                    castSection
+            } else if previewTitle == nil {
+                HStack {
+                    Spacer()
+                    ProgressView().padding(.vertical, 40)
+                    Spacer()
                 }
             }
-            .padding()
+            if !cast.isEmpty {
+                castSection
+            }
         }
-        .navigationTitle(displayTitle?.name ?? name)
+        .padding()
         .task(id: titleID) {
             async let castFetch: [TMDBCastMember] = appState.fetchCredits(tmdbID: tmdbID, mediaType: mediaType)
             if let title {
@@ -65,18 +64,18 @@ struct TitleDetailView: View {
     }
 
     private var hero: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: 20) {
             AsyncImage(url: ImageURL.poster(displayTitle?.posterPath, size: "w342")) { image in
                 image.resizable().aspectRatio(contentMode: .fit)
             } placeholder: {
                 Color.gray.opacity(0.2)
             }
-            .frame(width: 140)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(width: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(displayTitle?.name ?? name)
-                    .font(.title2).bold()
+                    .font(.title).bold()
                 if let status = displayTitle?.tvStatus {
                     Text(status).font(.caption).foregroundStyle(.secondary)
                 }

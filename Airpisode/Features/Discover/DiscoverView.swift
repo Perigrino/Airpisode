@@ -52,6 +52,7 @@ final class DiscoverViewModel: ObservableObject {
 struct DiscoverView: View {
     @StateObject private var viewModel: DiscoverViewModel
     @EnvironmentObject private var appState: AppState
+    @State private var expandedID: String?
 
     init(client: TMDBClientProtocol = TMDBClient(apiKey: Secrets.tmdbKey)) {
         _viewModel = StateObject(wrappedValue: DiscoverViewModel(client: client))
@@ -68,11 +69,7 @@ struct DiscoverView: View {
                     List {
                         Section("Because you're tracking…") {
                             ForEach(viewModel.recommendations) { result in
-                                NavigationLink {
-                                    TitleDetailView(tmdbID: result.id, mediaType: mediaType(of: result), name: result.displayName)
-                                } label: {
-                                    SearchRowView(result: result)
-                                }
+                                discoverRow(result)
                             }
                         }
                     }
@@ -84,17 +81,16 @@ struct DiscoverView: View {
                 placeholder("No results")
             } else {
                 List(viewModel.results) { result in
-                    NavigationLink {
-                        TitleDetailView(tmdbID: result.id, mediaType: mediaType(of: result), name: result.displayName)
-                    } label: {
-                        SearchRowView(result: result)
-                    }
+                    discoverRow(result)
                 }
                 .listStyle(.inset)
             }
         }
         .searchable(text: $viewModel.query, prompt: "Title, show, or movie")
         .navigationTitle("Discover")
+        .onChange(of: viewModel.query) { _ in
+            withAnimation(.easeInOut(duration: 0.15)) { expandedID = nil }
+        }
         .task(id: appState.library.entries.map(\.id).sorted().joined()) {
             await viewModel.loadRecommendations(library: appState.library)
         }
@@ -103,6 +99,24 @@ struct DiscoverView: View {
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             await viewModel.search()
+        }
+    }
+
+    private func discoverRow(_ result: TMDBSearchResult) -> some View {
+        let id = "\(mediaType(of: result).rawValue)-\(result.id)"
+        return Group {
+            SearchRowView(result: result, isExpanded: expandedID == id)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        expandedID = expandedID == id ? nil : id
+                    }
+                }
+            if expandedID == id {
+                TitleDetailContent(tmdbID: result.id, mediaType: mediaType(of: result), name: result.displayName)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
         }
     }
 

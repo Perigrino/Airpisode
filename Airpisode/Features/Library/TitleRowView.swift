@@ -3,6 +3,7 @@ import SwiftUI
 struct TitleRowView: View {
     let title: Title
     let nextLabel: String?
+    var isExpanded = false
 
     var body: some View {
         HStack(spacing: 14) {
@@ -11,7 +12,7 @@ struct TitleRowView: View {
             } placeholder: {
                 Color.gray.opacity(0.2)
             }
-            .frame(width: 66, height: 99)
+            .frame(width: 76, height: 114)
             .clipShape(RoundedRectangle(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 4) {
@@ -25,6 +26,10 @@ struct TitleRowView: View {
                 }
             }
             Spacer()
+            Image(systemName: "chevron.down")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())

@@ -52,9 +52,15 @@ struct SettingsView: View {
             }
 
             Section("About") {
-                Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    Image("tmdb-logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 20)
+                    Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

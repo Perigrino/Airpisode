@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MyShowsView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var expandedID: String?
 
     private var shows: [Title] {
         appState.library.entries
@@ -25,18 +26,26 @@ struct MyShowsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(shows) { title in
-                    NavigationLink {
-                        TitleDetailView(tmdbID: title.tmdbID, mediaType: .tv, name: title.name)
-                    } label: {
-                        TitleRowView(title: title, nextLabel: nextLabel(for: title))
-                    }
-                    .contextMenu {
+                    TitleRowView(title: title, nextLabel: nextLabel(for: title),
+                                 isExpanded: expandedID == title.id)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                expandedID = expandedID == title.id ? nil : title.id
+                            }
+                        }
+                        .contextMenu {
                             Button(role: .destructive) {
                                 appState.removeFromLibrary(title.id)
                             } label: {
                                 Label("Remove", systemImage: "trash")
                             }
                         }
+                    if expandedID == title.id {
+                        TitleDetailContent(tmdbID: title.tmdbID, mediaType: .tv, name: title.name)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
                 }
                 .listStyle(.inset)
             }

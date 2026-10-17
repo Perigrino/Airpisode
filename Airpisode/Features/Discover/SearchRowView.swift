@@ -2,24 +2,26 @@ import SwiftUI
 
 struct SearchRowView: View {
     let result: TMDBSearchResult
+    var isExpanded = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            AsyncImage(url: ImageURL.poster(result.posterPath)) { image in
+        HStack(spacing: 14) {
+            AsyncImage(url: ImageURL.poster(result.posterPath, size: "w185")) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } placeholder: {
                 Color.gray.opacity(0.2)
             }
-            .frame(width: 40, height: 60)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .frame(width: 60, height: 90)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(result.displayName)
-                    .fontWeight(.medium)
+                    .font(.title3)
+                    .fontWeight(.semibold)
                 Text(year)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
@@ -30,8 +32,13 @@ struct SearchRowView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+
+            Image(systemName: "chevron.down")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
 
     private var year: String {
