@@ -13,9 +13,16 @@ struct MyMoviesView: View {
     var body: some View {
         Group {
             if movies.isEmpty {
-                Text("Add your first movie in Discover")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 12) {
+                    Text("No movies yet")
+                        .foregroundStyle(.secondary)
+                    Button {
+                        appState.selectedSection = .discover
+                    } label: {
+                        Label("Find Movies in Discover", systemImage: "plus.circle")
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(movies) { title in
                     TitleRowView(title: title, nextLabel: nextLabel(for: title))
@@ -31,6 +38,14 @@ struct MyMoviesView: View {
             }
         }
         .navigationTitle("My Movies")
+        .toolbar {
+            Button {
+                appState.selectedSection = .discover
+            } label: {
+                Label("Add Movie", systemImage: "plus")
+            }
+            .help("Find a movie in Discover")
+        }
     }
 
     private func nextLabel(for title: Title) -> String? {

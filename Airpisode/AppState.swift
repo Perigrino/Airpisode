@@ -10,6 +10,7 @@ enum Secrets {
 final class AppState: ObservableObject {
     @Published var library = Library()
     @Published var lastRefreshError: String?
+    @Published var selectedSection: SidebarSection? = .dashboard
 
     let tmdb: TMDBClientProtocol
     let notifications: NotificationScheduler

@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum SidebarSection: String, Hashable {
+    case dashboard, shows, movies, discover
+}
+
 @main
 struct AirpisodeApp: App {
     @StateObject private var appState = AppState()
@@ -16,11 +20,27 @@ struct RootView: View {
 
     var body: some View {
         NavigationView {
-            List {
-                NavigationLink("Dashboard") { DashboardView() }
-                NavigationLink("My Shows") { MyShowsView() }
-                NavigationLink("My Movies") { MyMoviesView() }
-                NavigationLink("Discover") { DiscoverView() }
+            List(selection: $appState.selectedSection) {
+                NavigationLink(tag: SidebarSection.dashboard, selection: $appState.selectedSection) {
+                    DashboardView()
+                } label: {
+                    Text("Dashboard")
+                }
+                NavigationLink(tag: SidebarSection.shows, selection: $appState.selectedSection) {
+                    MyShowsView()
+                } label: {
+                    Text("My Shows")
+                }
+                NavigationLink(tag: SidebarSection.movies, selection: $appState.selectedSection) {
+                    MyMoviesView()
+                } label: {
+                    Text("My Movies")
+                }
+                NavigationLink(tag: SidebarSection.discover, selection: $appState.selectedSection) {
+                    DiscoverView()
+                } label: {
+                    Text("Discover")
+                }
             }
             .listStyle(.sidebar)
             .frame(minWidth: 180)
