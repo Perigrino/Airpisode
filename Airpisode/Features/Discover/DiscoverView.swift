@@ -163,6 +163,8 @@ struct DiscoverView: View {
                 TitleDetailContent(tmdbID: result.id, mediaType: mediaType(of: result), name: result.displayName)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(Motion.smooth) { expandedID = nil } }
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }

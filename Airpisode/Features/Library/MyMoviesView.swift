@@ -63,6 +63,8 @@ struct MyMoviesView: View {
                 TitleDetailContent(tmdbID: title.tmdbID, mediaType: .movie, name: title.name)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture { collapse() }
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -89,6 +91,10 @@ struct MyMoviesView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
         .appear()
+    }
+
+    private func collapse() {
+        withAnimation(Motion.smooth) { expandedID = nil }
     }
 
     private func nextLabel(for title: Title) -> String? {

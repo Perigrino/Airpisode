@@ -32,16 +32,29 @@ struct EpisodeRowView: View {
             }
             Spacer()
             // Date-only air dates render as a plain day; never invent a clock time.
-            Text(episode.airDate.map { Self.dayFormatter.string(from: $0) } ?? "TBD")
+            // Past episodes include the year, so they're unambiguous in a long list.
+            Text(dateText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
     }
 
+    private var dateText: String {
+        guard let date = episode.airDate else { return "TBD" }
+        let formatter = aired ? Self.fullDayFormatter : Self.dayFormatter
+        return formatter.string(from: date)
+    }
+
     static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "MMM d"
+        return f
+    }()
+
+    static let fullDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, yyyy"
         return f
     }()
 }
