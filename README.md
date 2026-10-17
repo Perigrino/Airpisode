@@ -14,6 +14,14 @@ Airpisode is a macOS app that tracks when your TV shows and movies come out. Sea
 - **Notifications**: sends an alert before an episode or release, with a lead time you choose.
 - **Offline library**: stores your watchlist as JSON on disk, so it loads without a network connection.
 
+## Install
+
+Airpisode ships as a disk image. Download the latest `Airpisode-<version>.dmg`, open it, and drag Airpisode to your Applications folder. The build is not notarized, so on first launch macOS may warn about an unidentified developer: right-click Airpisode and choose Open.
+
+The distributed app ships without an API key. On first launch Airpisode asks for your own free TMDB key and saves it on your Mac. You can change it any time in Settings. Without a key, search and refresh cannot reach TMDB.
+
+Get a key from [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api).
+
 ## How it works
 
 Airpisode has no backend. It reads metadata from the TMDB API and keeps your library in Application Support.
@@ -28,11 +36,11 @@ Airpisode never invents a release time. When TMDB lists a date without a time, t
 ## Requirements
 
 - macOS 13 or later
-- Xcode 15 or later
-- XcodeGen: `brew install xcodegen`
 - A TMDB API key from [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)
 
-## Setup
+To build from source you also need Xcode 15 or later and XcodeGen (`brew install xcodegen`).
+
+## Build and run
 
 1. Copy the example config and add your TMDB API key:
 
@@ -49,7 +57,7 @@ open Airpisode.xcodeproj
 
 3. Run the app with ⌘R.
 
-The `.xcodeproj` is generated from `project.yml`, so it isn't tracked. `TMDBKey.xcconfig` holds your key and isn't tracked either. Never commit it.
+The `.xcodeproj` is generated from `project.yml`, so it isn't tracked. `TMDBKey.xcconfig` holds your key and isn't tracked either. Never commit it. The key in this file is a developer fallback; the key a user enters in Settings takes precedence.
 
 ## Development
 
@@ -60,11 +68,19 @@ xcodegen generate
 xcodebuild test -project Airpisode.xcodeproj -scheme Airpisode -destination 'platform=macOS'
 ```
 
+Build a distributable disk image, with no key baked in:
+
+```bash
+./Scripts/build-dmg.sh
+```
+
+The image is written to `dist/`.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 
 ## Data and privacy
 
-Airpisode stores your library at `~/Library/Application Support/Airpisode/library.json`. It sends your TMDB API key and search terms to TMDB only. There is no analytics and no telemetry.
+Airpisode stores your library at `~/Library/Application Support/Airpisode/library.json` and your TMDB key in your app preferences. It sends your key and search terms to TMDB only. There is no analytics and no telemetry.
 
 ## Attribution
 

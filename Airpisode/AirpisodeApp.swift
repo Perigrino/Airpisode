@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
 struct RootView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var needsKey = !Secrets.hasKey
 
     var body: some View {
         NavigationView {
@@ -54,6 +55,18 @@ struct RootView: View {
             DashboardView()
         }
         .task { await appState.loadLibrary() }
+        .sheet(isPresented: $needsKey) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Welcome to Airpisode")
+                    .font(.title2).bold()
+                APIKeyForm {
+                    needsKey = false
+                    Task { await appState.runFullRefresh() }
+                }
+            }
+            .padding(24)
+            .frame(width: 420)
+        }
     }
 
     private func link(_ section: SidebarSection, _ title: String, _ icon: String) -> some View {

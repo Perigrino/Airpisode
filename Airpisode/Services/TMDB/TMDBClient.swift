@@ -11,14 +11,20 @@ protocol TMDBClientProtocol: Sendable {
 }
 
 struct TMDBClient: TMDBClientProtocol {
-    let apiKey: String
+    /// Resolved per request, so a key entered in Settings takes effect without rebuilding clients.
+    let apiKey: @Sendable () -> String
     var session: URLSession = .shared
     private static let base = URL(string: "https://api.themoviedb.org/3")!
     private static let decoder = JSONDecoder()
 
+    init(apiKey: @escaping @Sendable () -> String = { Secrets.tmdbKey }, session: URLSession = .shared) {
+        self.apiKey = apiKey
+        self.session = session
+    }
+
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
         var comps = URLComponents(url: TMDBClient.base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
-        comps.queryItems = query + [URLQueryItem(name: "api_key", value: apiKey)]
+        comps.queryItems = query + [URLQueryItem(name: "api_key", value: apiKey())]
         let (data, response) = try await session.data(from: comps.url!)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw URLError(.badServerResponse)

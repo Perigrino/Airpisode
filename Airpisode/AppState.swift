@@ -1,8 +1,23 @@
 import SwiftUI
 
 enum Secrets {
+    private static let storageKey = "tmdbAPIKey"
+
+    /// The user's TMDB API key: one entered in Settings wins, otherwise the build-time
+    /// Info.plist value is a developer fallback. A distributed build ships without a baked key,
+    /// so the app asks for one on first launch.
     static var tmdbKey: String {
-        Bundle.main.object(forInfoDictionaryKey: "TMDB_API_KEY") as? String ?? ""
+        let stored = UserDefaults.standard.string(forKey: storageKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !stored.isEmpty { return stored }
+        let baked = Bundle.main.object(forInfoDictionaryKey: "TMDB_API_KEY") as? String ?? ""
+        return baked.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static var hasKey: Bool { !tmdbKey.isEmpty }
+
+    static func setTMDBKey(_ value: String) {
+        UserDefaults.standard.set(value.trimmingCharacters(in: .whitespacesAndNewlines), forKey: storageKey)
     }
 }
 
@@ -19,7 +34,7 @@ final class AppState: ObservableObject {
 
     init(
         store: LibraryStore = LibraryStore(),
-        tmdb: TMDBClientProtocol = TMDBClient(apiKey: Secrets.tmdbKey),
+        tmdb: TMDBClientProtocol = TMDBClient(),
         notifications: NotificationScheduler = NotificationScheduler(client: SystemNotificationClient())
     ) {
         self.store = store

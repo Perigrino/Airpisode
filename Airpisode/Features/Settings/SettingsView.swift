@@ -9,6 +9,10 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("TMDB API Key") {
+                APIKeyForm { Task { await appState.runFullRefresh() } }
+            }
+
             Section("Notifications") {
                 if prefs.permissionRequested && permissionDenied {
                     Label("Notifications are denied. Enable them in System Settings → Notifications → Airpisode.",

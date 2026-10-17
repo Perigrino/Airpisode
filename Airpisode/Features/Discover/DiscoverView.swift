@@ -61,7 +61,7 @@ struct DiscoverView: View {
     @State private var expandedID: String?
     @State private var filter: DiscoverFilter = .all
 
-    init(client: TMDBClientProtocol = TMDBClient(apiKey: Secrets.tmdbKey)) {
+    init(client: TMDBClientProtocol = TMDBClient()) {
         _viewModel = StateObject(wrappedValue: DiscoverViewModel(client: client))
     }
 
