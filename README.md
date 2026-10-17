@@ -6,17 +6,10 @@ Airpisode is a macOS app that tracks when your TV shows and movies come out. It 
 
 ## Screenshots
 
-**Upcoming** — every release grouped by when it lands, with a countdown.
-
-![Airpisode's Upcoming dashboard](Screenshots/upcoming.png)
-
-**My Shows** — your watchlist, with the next episode on each row.
-
-![Airpisode's My Shows list](Screenshots/my-shows.png)
-
-**Discover** — suggestions drawn from the titles you already track.
-
-![Airpisode's Discover tab](Screenshots/discover.png)
+| Upcoming | My Shows |
+| --- | --- |
+| ![Airpisode's Upcoming dashboard](Screenshots/upcoming.png) | ![Airpisode's My Shows list](Screenshots/my-shows.png) |
+| ![Airpisode's Discover tab](Screenshots/discover.png) | ![Airpisode's My Movies list](Screenshots/movies.png) |
 
 ## Features
 

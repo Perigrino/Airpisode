@@ -57,6 +57,11 @@ struct AirpisodeApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
+        // An "always"-style system scroller reserves a gutter on the page's right edge, which both
+        // shifted the content column off-centre and put a scroll line up at first paint. This app
+        // therefore always scrollers overlay-style; the window sweep and the live-scroll observer
+        // keep even that flash from drawing.
+        UserDefaults.standard.set("WhenScrolling", forKey: "AppleShowScrollBars")
     }
 
     func userNotificationCenter(
@@ -78,6 +83,8 @@ private final class PortraitWindow: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         Self.pin(window)
+        // Sweep at attach too: the first page can already carry a scroller before viewWillDraw.
+        Self.hideScrollbars(in: window?.contentView)
         Self.observeLiveScrollingIfNeeded()
     }
 
@@ -135,8 +142,11 @@ private struct WindowConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = PortraitWindow()
         // The view can attach after this returns, and window-frame restoration can run after
-        // that; pin once more once everything has settled.
+        // that; re-pin and sweep again after the first page has settled.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { PortraitWindow.pin(view.window) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            PortraitWindow.hideScrollbars(in: view.window?.contentView)
+        }
         return view
     }
 
