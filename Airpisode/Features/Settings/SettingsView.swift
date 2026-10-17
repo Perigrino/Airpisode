@@ -11,6 +11,7 @@ struct SettingsView: View {
         Form {
             Section("TMDB API Key") {
                 APIKeyForm { Task { await appState.runFullRefresh() } }
+                TMDBKeyHelp()
             }
 
             Section("Notifications") {

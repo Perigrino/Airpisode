@@ -75,6 +75,23 @@ struct CountdownText: View {
     }
 }
 
+/// The in-app app mark: gradient rounded square with a play-on-TV glyph.
+struct AppLogo: View {
+    var size: CGFloat = 84
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
+            .fill(Theme.gradient)
+            .frame(width: size, height: size)
+            .overlay(
+                Image(systemName: "play.tv.fill")
+                    .font(.system(size: size * 0.42, weight: .semibold))
+                    .foregroundStyle(.white)
+            )
+            .shadow(color: Theme.accent.opacity(0.45), radius: size * 0.22, y: size * 0.1)
+    }
+}
+
 /// Small circular avatar photo for cast (Hobi "Starring" row).
 struct CastAvatar: View {
     let name: String

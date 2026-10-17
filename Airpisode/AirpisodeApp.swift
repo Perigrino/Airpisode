@@ -56,16 +56,13 @@ struct RootView: View {
         }
         .task { await appState.loadLibrary() }
         .sheet(isPresented: $needsKey) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Welcome to Airpisode")
-                    .font(.title2).bold()
-                APIKeyForm {
+            WelcomeView(
+                onDone: {
                     needsKey = false
                     Task { await appState.runFullRefresh() }
-                }
-            }
-            .padding(24)
-            .frame(width: 420)
+                },
+                onSkip: { needsKey = false }
+            )
         }
     }
 

@@ -151,13 +151,14 @@ struct DiscoverView: View {
         let id = "\(mediaType(of: result).rawValue)-\(result.id)"
         let tracked = appState.library.entries.contains { $0.id == id }
         return VStack(spacing: 0) {
-            SearchRowView(result: result, isExpanded: expandedID == id, isTracked: tracked)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(Motion.smooth) {
-                        expandedID = expandedID == id ? nil : id
-                    }
+            Button {
+                withAnimation(Motion.smooth) {
+                    expandedID = expandedID == id ? nil : id
                 }
+            } label: {
+                SearchRowView(result: result, isExpanded: expandedID == id, isTracked: tracked)
+            }
+            .buttonStyle(.plain)
             if expandedID == id {
                 TitleDetailContent(tmdbID: result.id, mediaType: mediaType(of: result), name: result.displayName)
                     .padding(.horizontal, 12)

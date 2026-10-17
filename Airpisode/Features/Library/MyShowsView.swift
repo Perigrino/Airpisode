@@ -43,20 +43,22 @@ struct MyShowsView: View {
     @ViewBuilder
     private func card(_ title: Title) -> some View {
         VStack(spacing: 0) {
-            TitleRowView(title: title, nextLabel: nextLabel(for: title),
-                         isExpanded: expandedID == title.id)
-                .onTapGesture {
-                    withAnimation(Motion.smooth) {
-                        expandedID = expandedID == title.id ? nil : title.id
-                    }
+            Button {
+                withAnimation(Motion.smooth) {
+                    expandedID = expandedID == title.id ? nil : title.id
                 }
-                .contextMenu {
-                    Button(role: .destructive) {
-                        appState.removeFromLibrary(title.id)
-                    } label: {
-                        Label("Remove", systemImage: "trash")
-                    }
+            } label: {
+                TitleRowView(title: title, nextLabel: nextLabel(for: title),
+                             isExpanded: expandedID == title.id)
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
+                Button(role: .destructive) {
+                    appState.removeFromLibrary(title.id)
+                } label: {
+                    Label("Remove", systemImage: "trash")
                 }
+            }
             if expandedID == title.id {
                 TitleDetailContent(tmdbID: title.tmdbID, mediaType: .tv, name: title.name)
                     .padding(.horizontal, 12)
