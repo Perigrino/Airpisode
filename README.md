@@ -4,6 +4,20 @@ Never miss what's next.
 
 Airpisode is a macOS app that tracks when your TV shows and movies come out. It reads metadata from TMDB, keeps your watchlist on your Mac, and notifies you before a release. No account, no server, no sync.
 
+## Screenshots
+
+**Upcoming** — every release grouped by when it lands, with a countdown.
+
+![Airpisode's Upcoming dashboard](Screenshots/upcoming.png)
+
+**My Shows** — your watchlist, with the next episode on each row.
+
+![Airpisode's My Shows list](Screenshots/my-shows.png)
+
+**Discover** — suggestions drawn from the titles you already track.
+
+![Airpisode's Discover tab](Screenshots/discover.png)
+
 ## Features
 
 - **Upcoming dashboard**: groups releases into Today, This Week, and Later, each with a countdown.
