@@ -68,7 +68,7 @@ struct MyShowsView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(Theme.cardBackground(cornerRadius: 16))
+        .background(PosterTintedCard(posterPath: title.posterPath))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .hoverLift()
     }
