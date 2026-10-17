@@ -44,7 +44,7 @@ struct RootView: View {
     var body: some View {
         NavigationView {
             List(selection: $appState.selectedSection) {
-                link(.dashboard, "Upcoming", "sparkles")
+                link(.dashboard, "Upcoming", "calendar")
                 link(.shows, "My Shows", "tv")
                 link(.movies, "My Movies", "film")
                 link(.discover, "Discover", "magnifyingglass")

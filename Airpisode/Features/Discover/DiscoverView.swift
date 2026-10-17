@@ -85,7 +85,11 @@ struct DiscoverView: View {
                     }
                 } else if let error = viewModel.errorMessage {
                     placeholder(error)
-                } else if viewModel.results.isEmpty && !viewModel.isSearching {
+                } else if viewModel.results.isEmpty && viewModel.isSearching {
+                    ForEach(0..<4, id: \.self) { _ in
+                        SkeletonRow()
+                    }
+                } else if viewModel.results.isEmpty {
                     placeholder("No results")
                 } else {
                     ForEach(filtered(viewModel.results)) { result in

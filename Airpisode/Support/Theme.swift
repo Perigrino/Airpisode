@@ -7,6 +7,7 @@ enum Theme {
     static let background = Color(nsColor: .black)
     static let card = Color.white.opacity(0.05)
     static let chip = Color.white.opacity(0.08)
+    static let hairline = Color.white.opacity(0.08)
 
     static let gradient = LinearGradient(
         colors: [accent, accentMagenta],
@@ -20,10 +21,40 @@ enum Theme {
         endPoint: .trailing
     )
 
-    /// Rounded card background used for inline detail panels and rows.
+    /// Page canvas: near-black with soft accent glows in two corners so the screen
+    /// reads as depth rather than a flat void. Content scrolls over it.
+    static var canvas: some View {
+        ZStack {
+            background
+            RadialGradient(
+                colors: [accent.opacity(0.22), .clear],
+                center: UnitPoint(x: 0.10, y: -0.06), startRadius: 0, endRadius: 640
+            )
+            RadialGradient(
+                colors: [accentMagenta.opacity(0.16), .clear],
+                center: UnitPoint(x: 1.08, y: 1.12), startRadius: 0, endRadius: 720
+            )
+        }
+    }
+
+    /// Translucent card surface with a soft top highlight — a material catching light.
     static func cardBackground(cornerRadius: CGFloat = 14) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(card)
+            .fill(.ultraThinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(card)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.14), .white.opacity(0.02)],
+                            startPoint: .top, endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+            )
     }
 
     /// Placeholder tint shown while a poster loads.
@@ -32,11 +63,11 @@ enum Theme {
     }
 }
 
-/// Page canvas: near-black background behind scroll content.
+/// Page canvas: gradient background behind scroll content.
 struct ScreenBackground: ViewModifier {
     func body(content: Content) -> some View {
         ZStack {
-            Theme.background.ignoresSafeArea()
+            Theme.canvas.ignoresSafeArea()
             content
         }
     }
@@ -45,5 +76,3 @@ struct ScreenBackground: ViewModifier {
 extension View {
     func screenBackground() -> some View { modifier(ScreenBackground()) }
 }
-
-

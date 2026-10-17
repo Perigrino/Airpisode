@@ -27,11 +27,7 @@ struct TitleDetailContent: View {
                     movieReleaseList
                 }
             } else if previewTitle == nil {
-                HStack {
-                    Spacer()
-                    ProgressView().padding(.vertical, 40)
-                    Spacer()
-                }
+                SkeletonDetail()
             }
             if !cast.isEmpty {
                 castSection
@@ -40,7 +36,7 @@ struct TitleDetailContent: View {
         .padding(.top, 4)
         .task(id: titleID) {
             async let castFetch: [TMDBCastMember] = appState.fetchCredits(tmdbID: tmdbID, mediaType: mediaType)
-            if let title {
+            if title != nil {
                 await appState.refreshTitle(titleID)
             } else {
                 previewTitle = await appState.fetchPreviewTitle(tmdbID: tmdbID, mediaType: mediaType)
@@ -76,6 +72,28 @@ struct TitleDetailContent: View {
 
                 Spacer(minLength: 0)
             }
+        }
+        .padding(16)
+        .background(heroBackdrop)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// Blurred poster wash behind the hero — a translucent panel, Hobi-style.
+    private var heroBackdrop: some View {
+        ZStack {
+            Theme.accent.opacity(0.10)
+            if let path = displayTitle?.posterPath, let url = ImageURL.poster(path, size: "w342") {
+                AsyncImage(url: url) { image in
+                    image.resizable().aspectRatio(contentMode: .fill).blur(radius: 50)
+                } placeholder: {
+                    Color.clear
+                }
+                .opacity(0.4)
+            }
+            LinearGradient(
+                colors: [.black.opacity(0.10), .black.opacity(0.55)],
+                startPoint: .top, endPoint: .bottom
+            )
         }
     }
 

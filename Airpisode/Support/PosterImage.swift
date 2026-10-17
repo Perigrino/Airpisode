@@ -25,7 +25,9 @@ struct PosterImage: View {
                         }
                     }
             } else {
-                Theme.posterPlaceholder
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Theme.chip)
+                    .shimmer(cornerRadius: cornerRadius)
             }
         }
         .frame(width: width, height: height)
