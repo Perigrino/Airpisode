@@ -45,29 +45,6 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Debug") {
-                Button("Send Test Notification (fires in 10s)") {
-                    Task { await appState.notifications.scheduleTest(in: 10) }
-                }
-                Button("Send Sample Release Alert (fires in 10s)") {
-                    Task { await appState.notifications.scheduleReleaseSample(library: appState.library, in: 10) }
-                }
-                if let preview = NotificationScheduler.releaseSamplePreview(library: appState.library) {
-                    Text(preview)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Track a show or movie first to preview a real release alert.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if prefs.permissionRequested && permissionDenied {
-                    Text("Status: denied. Enable in System Settings → Notifications → Airpisode.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-            }
-
             Section("About") {
                 HStack(spacing: 10) {
                     Image("tmdb-logo")

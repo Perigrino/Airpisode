@@ -94,7 +94,6 @@ struct DiscoverView: View {
                 }
             }
             .padding(24)
-            .frame(maxWidth: 820, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .screenBackground()
