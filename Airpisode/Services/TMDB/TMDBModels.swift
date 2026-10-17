@@ -100,6 +100,19 @@ struct TMDBRecommendation: Decodable {
         case releaseDate = "release_date"
     }
 }
+struct TMDBCreditsResponse: Decodable {
+    let cast: [TMDBCastMember]
+}
+struct TMDBCastMember: Decodable, Identifiable {
+    let id: Int                      // person id
+    let name: String
+    let character: String?
+    let profilePath: String?
+    enum CodingKeys: String, CodingKey {
+        case id, name, character
+        case profilePath = "profile_path"
+    }
+}
 struct TMDBReleaseDatesResponse: Decodable {
     let id: Int
     let results: [TMDBRegionReleases]

@@ -35,26 +35,17 @@ final class DiscoverViewModel: ObservableObject {
         isSearching = false
     }
 
-    /// "Because you're tracking…": recommendations from the most recently added tracked titles.
+    /// "Because you're tracking…": titles most similar to the most recently added tracked title.
     func loadRecommendations(library: Library) async {
-        let seeds = library.entries.sorted { $0.addedAt > $1.addedAt }.prefix(3)
-        guard !seeds.isEmpty else {
+        guard let seed = library.entries.max(by: { $0.addedAt < $1.addedAt }) else {
             recommendations = []
             return
         }
-        var seen = Set<String>()
-        var picks: [TMDBSearchResult] = []
-        for seed in seeds {
-            guard let recs = try? await client.recommendations(mediaType: seed.mediaType, tmdbID: seed.tmdbID) else { continue }
-            for rec in recs {
-                let key = "\(rec.mediaType)-\(rec.id)"
-                if seen.insert(key).inserted,
-                   !library.entries.contains(where: { $0.id == key }) {
-                    picks.append(rec)
-                }
-            }
+        guard let recs = try? await client.similar(mediaType: seed.mediaType, tmdbID: seed.tmdbID) else {
+            recommendations = []
+            return
         }
-        recommendations = Array(picks.prefix(12))
+        recommendations = Array(recs.prefix(6))
     }
 }
 

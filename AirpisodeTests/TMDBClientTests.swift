@@ -25,10 +25,15 @@ final class TMDBClientTests: XCTestCase {
         let d = try JSONDecoder().decode(TMDBMovieDetail.self, from: fixture("movie_detail"))
         XCTAssertFalse(d.title.isEmpty)
     }
-    func testDecodesRecommendations() throws {
-        let page = try JSONDecoder().decode(TMDBRecommendationsResponse.self, from: fixture("recommendations_tv"))
+    func testDecodesSimilar() throws {
+        let page = try JSONDecoder().decode(TMDBRecommendationsResponse.self, from: fixture("similar_tv"))
         XCTAssertFalse(page.results.isEmpty)
         XCTAssertFalse(page.results[0].name?.isEmpty ?? true)
+    }
+    func testDecodesCredits() throws {
+        let page = try JSONDecoder().decode(TMDBCreditsResponse.self, from: fixture("credits_tv"))
+        XCTAssertFalse(page.cast.isEmpty)
+        XCTAssertFalse(page.cast[0].name.isEmpty)
     }
     func testDecodesMovieReleaseDates() throws {
         let r = try JSONDecoder().decode(TMDBReleaseDatesResponse.self, from: fixture("movie_release_dates"))

@@ -72,6 +72,11 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Fetches a title's cast without adding it to the library.
+    func fetchCredits(tmdbID: Int, mediaType: MediaType) async -> [TMDBCastMember] {
+        (try? await tmdb.credits(mediaType: mediaType, tmdbID: tmdbID)) ?? []
+    }
+
     /// Refreshes every tracked title through the ReleaseEngine (staleness-tiered) and reschedules alerts.
     func runFullRefresh() async {
         let engine = ReleaseEngine(client: tmdb)

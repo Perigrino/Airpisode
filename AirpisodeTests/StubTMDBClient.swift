@@ -12,8 +12,9 @@ final class StubTMDBClient: TMDBClientProtocol, @unchecked Sendable {
     var tvDetailCallCount = 0
     var movieDetailCallCount = 0
     var seasonCallNumbers: [Int] = []
-    var recommendations: [String: [TMDBSearchResult]] = [:]  // key "tv-123"
-    var recommendationRequests: [String] = []
+    var similarTitles: [String: [TMDBSearchResult]] = [:]  // key "tv-123"
+    var similarRequests: [String] = []
+    var creditsResult: [TMDBCastMember] = []
 
     func searchMulti(query: String) async throws -> [TMDBSearchResult] {
         lastQuery = query
@@ -43,9 +44,13 @@ final class StubTMDBClient: TMDBClientProtocol, @unchecked Sendable {
         return releaseDatesResult
     }
 
-    func recommendations(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {
+    func similar(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {
         let key = "\(mediaType.rawValue)-\(tmdbID)"
-        recommendationRequests.append(key)
-        return recommendations[key] ?? []
+        similarRequests.append(key)
+        return similarTitles[key] ?? []
+    }
+
+    func credits(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBCastMember] {
+        creditsResult
     }
 }

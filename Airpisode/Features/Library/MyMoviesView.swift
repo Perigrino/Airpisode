@@ -25,8 +25,12 @@ struct MyMoviesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(movies) { title in
-                    TitleRowView(title: title, nextLabel: nextLabel(for: title))
-                        .contextMenu {
+                    NavigationLink {
+                        TitleDetailView(tmdbID: title.tmdbID, mediaType: .movie, name: title.name)
+                    } label: {
+                        TitleRowView(title: title, nextLabel: nextLabel(for: title))
+                    }
+                    .contextMenu {
                             Button(role: .destructive) {
                                 appState.removeFromLibrary(title.id)
                             } label: {

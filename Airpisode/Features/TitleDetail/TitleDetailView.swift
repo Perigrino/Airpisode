@@ -8,6 +8,7 @@ struct TitleDetailView: View {
     @EnvironmentObject private var appState: AppState
     @State private var selectedSeason: Int?
     @State private var previewTitle: Title?
+    @State private var cast: [TMDBCastMember] = []
 
     private var titleID: String { "\(mediaType.rawValue)-\(tmdbID)" }
     private var title: Title? { appState.library.titles[titleID] }
@@ -31,15 +32,34 @@ struct TitleDetailView: View {
                         Spacer()
                     }
                 }
+                if !cast.isEmpty {
+                    castSection
+                }
             }
             .padding()
         }
         .navigationTitle(displayTitle?.name ?? name)
         .task(id: titleID) {
+            async let castFetch: [TMDBCastMember] = appState.fetchCredits(tmdbID: tmdbID, mediaType: mediaType)
             if let title {
                 await appState.refreshTitle(titleID)
             } else {
                 previewTitle = await appState.fetchPreviewTitle(tmdbID: tmdbID, mediaType: mediaType)
+            }
+            cast = await castFetch
+        }
+    }
+
+    private var castSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Cast")
+                .font(.headline)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(cast.prefix(20), id: \.id) { member in
+                        CastMemberView(member: member)
+                    }
+                }
             }
         }
     }

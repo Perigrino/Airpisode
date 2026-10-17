@@ -18,17 +18,11 @@ final class DiscoverViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testLoadRecommendationsDedupesExcludesTrackedAndCaps() async {
+    func testLoadRecommendationsUsesMostRecentSeedAndCapsAtSix() async {
         let stub = StubTMDBClient()
-        stub.recommendations["tv-1"] = [
-            .init(id: 10, mediaType: "tv", name: "Rec A", title: nil, overview: nil, posterPath: nil, firstAirDate: nil, releaseDate: nil),
-            .init(id: 20, mediaType: "tv", name: "Rec B", title: nil, overview: nil, posterPath: nil, firstAirDate: nil, releaseDate: nil),
-        ]
-        stub.recommendations["movie-20"] = [
-            .init(id: 20, mediaType: "movie", name: "Same ID other type", title: nil, overview: nil, posterPath: nil, firstAirDate: nil, releaseDate: nil),
-            .init(id: 30, mediaType: "movie", name: "Rec C", title: nil, overview: nil, posterPath: nil, firstAirDate: nil, releaseDate: nil),
-            .init(id: 20, mediaType: "movie", name: "Duplicate", title: nil, overview: nil, posterPath: nil, firstAirDate: nil, releaseDate: nil),
-        ]
+        stub.similarTitles["movie-20"] = (1...10).map {
+            .init(id: $0, mediaType: "movie", name: "Rec \($0)", title: nil, overview: nil, posterPath: nil, firstAirDate: nil, releaseDate: nil)
+        }
         let older = Date(timeIntervalSince1970: 1000)
         let newer = Date(timeIntervalSince1970: 2000)
         var library = Library()
@@ -38,10 +32,8 @@ final class DiscoverViewModelTests: XCTestCase {
         ]
         let vm = DiscoverViewModel(client: stub)
         await vm.loadRecommendations(library: library)
-        // Most recently added first → movie-20's recs before tv-1's.
-        XCTAssertEqual(stub.recommendationRequests, ["movie-20", "tv-1"])
-        XCTAssertEqual(vm.recommendations.map { "\($0.mediaType)-\($0.id)" }, ["movie-30", "tv-10", "tv-20"])
-        XCTAssertFalse(vm.recommendations.contains { $0.id == 20 && $0.mediaType == "movie" }, "already-tracked title excluded")
+        XCTAssertEqual(stub.similarRequests, ["movie-20"], "only the most recently added title seeds suggestions")
+        XCTAssertEqual(vm.recommendations.count, 6)
     }
 
     @MainActor
@@ -50,7 +42,7 @@ final class DiscoverViewModelTests: XCTestCase {
         let vm = DiscoverViewModel(client: stub)
         await vm.loadRecommendations(library: Library())
         XCTAssertTrue(vm.recommendations.isEmpty)
-        XCTAssertTrue(stub.recommendationRequests.isEmpty)
+        XCTAssertTrue(stub.similarRequests.isEmpty)
     }
 
     @MainActor

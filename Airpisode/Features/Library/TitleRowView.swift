@@ -5,26 +5,28 @@ struct TitleRowView: View {
     let nextLabel: String?
 
     var body: some View {
-        HStack(spacing: 10) {
-            AsyncImage(url: ImageURL.poster(title.posterPath)) { image in
+        HStack(spacing: 14) {
+            AsyncImage(url: ImageURL.poster(title.posterPath, size: "w185")) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
                 Color.gray.opacity(0.2)
             }
-            .frame(width: 40, height: 60)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .frame(width: 66, height: 99)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title.name)
-                    .fontWeight(.medium)
+                    .font(.title3)
+                    .fontWeight(.semibold)
                 if let nextLabel {
                     Text(nextLabel)
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
             Spacer()
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 }
