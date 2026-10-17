@@ -1,34 +1,38 @@
 import SwiftUI
 
 /// Sweeping sheen for loading placeholders — the "shimmer" shown while content loads.
+///
+/// Driven by `TimelineView(.animation)` rather than a `repeatForever` animation on purpose:
+/// a repeating `withAnimation` is orphaned when its placeholder is removed mid-sweep and is then
+/// inherited by the next unrelated `withAnimation` (which made the expand/collapse transition loop
+/// forever). A timeline has no animation state, so it can never leak into other transitions.
 private struct ShimmerModifier: ViewModifier {
     let cornerRadius: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = -1
+
+    private let period: Double = 1.4
 
     func body(content: Content) -> some View {
         content
             .overlay {
                 if !reduceMotion {
                     GeometryReader { geo in
-                        LinearGradient(
-                            colors: [.clear, .white.opacity(0.22), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: geo.size.width * 0.7)
-                        .offset(x: phase * geo.size.width * 1.7)
+                        TimelineView(.animation) { context in
+                            let t = context.date.timeIntervalSinceReferenceDate
+                            let progress = (t.truncatingRemainder(dividingBy: period)) / period
+                            LinearGradient(
+                                colors: [.clear, .white.opacity(0.22), .clear],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: geo.size.width * 0.7)
+                            .offset(x: -geo.size.width * 0.7 + progress * geo.size.width * 1.7)
+                        }
                     }
                     .allowsHitTesting(false)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
-                    phase = 1
-                }
-            }
     }
 }
 
