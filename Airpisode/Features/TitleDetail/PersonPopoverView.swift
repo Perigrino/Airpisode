@@ -35,6 +35,13 @@ struct PersonPopoverView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineSpacing(2)
+                        // The popover only carries a glimpse; the full story lives on TMDB.
+                        Link(destination: URL(string: "https://www.themoviedb.org/person/\(member.id)")!) {
+                            Text("Full bio →")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Theme.accent)
+                        }
                     }
                 } else if finishedLoading {
                     Text("Couldn't load details.")
@@ -89,7 +96,7 @@ struct PersonPopoverView: View {
         let lines = bio.components(separatedBy: " \n")
             .flatMap { $0.components(separatedBy: "\n") }
             .filter { !$0.isEmpty }
-        let prefix = lines.prefix(4).joined(separator: " ")
+        let prefix = lines.prefix(3).joined(separator: " ")
         return prefix.count < bio.count ? prefix + " …" : prefix
     }
 
