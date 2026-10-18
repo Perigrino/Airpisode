@@ -9,7 +9,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
     var label: String {
         switch self {
-        case .dashboard: return "Upcoming"
+        case .dashboard: return "To Watch"
         case .shows: return "My Shows"
         case .movies: return "My Movies"
         case .discover: return "Discover"
@@ -18,7 +18,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
     var icon: String {
         switch self {
-        case .dashboard: return "calendar"
+        case .dashboard: return "checklist"
         case .shows: return "tv"
         case .movies: return "film"
         case .discover: return "magnifyingglass"

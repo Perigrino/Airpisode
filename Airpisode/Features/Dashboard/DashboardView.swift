@@ -6,6 +6,9 @@ struct DashboardView: View {
 
     private var items: [UpcomingItem] { appState.library.upcomingReleases() }
 
+/// "Date-only items with no known date floor in the Later bucket" is preserved from Upcoming;
+/// these three stay exactly as before.
+
     private var today: [UpcomingItem] { items.filter { ($0.date ?? .distantPast) < Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400) && $0.date != nil } }
     private var thisWeek: [UpcomingItem] { items.filter { item in
         guard let date = item.date else { return false }
@@ -32,8 +35,8 @@ struct DashboardView: View {
                 }
 
                 HStack(alignment: .firstTextBaseline) {
-                    PageHeader(title: "Upcoming",
-                               subtitle: "Don't miss out on these upcoming releases")
+                    PageHeader(title: "To Watch",
+                               subtitle: "What's coming up — and what already aired and is waiting for you")
                     Spacer()
                     if justUpdated {
                         Label("Updated just now", systemImage: "checkmark.circle.fill")
@@ -43,9 +46,26 @@ struct DashboardView: View {
                     }
                 }
 
-                if items.isEmpty {
+                if items.isEmpty
+                    && appState.library.releasedUnwatchedEpisodes().isEmpty
+                    && appState.library.releasedUnwatchedMovies().isEmpty {
                     emptyState
                 } else {
+                    // Aired-but-unwatched first (checkbox clears them), then what's still ahead.
+                    HistorySection(
+                        items: appState.library.releasedUnwatchedEpisodes(),
+                        heading: "Episodes",
+                        onMarkWatched: { item in
+                            appState.setEpisodeWatched(true, episode: item.episode, titleID: item.title.id)
+                        }
+                    )
+                    HistorySection(
+                        items: appState.library.releasedUnwatchedMovies(),
+                        heading: "Movies",
+                        onMarkWatched: { item in
+                            appState.setMovieWatched(true, titleID: item.title.id)
+                        }
+                    )
                     section("Today", today)
                     section("This Week", thisWeek)
                     section("Later", later)
@@ -58,7 +78,7 @@ struct DashboardView: View {
         }
         .scrollIndicators(.hidden)
         .screenBackground()
-        .navigationTitle("Upcoming")
+        .navigationTitle("To Watch")
         .toolbar {
             Button {
                 Task {
@@ -81,10 +101,10 @@ struct DashboardView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "calendar.badge.plus")
+            Image(systemName: "checklist")
                 .font(.system(size: 40))
                 .foregroundStyle(.tertiary)
-            Text("Nothing on the calendar yet")
+            Text("Nothing to watch yet")
                 .font(.headline)
             Text("Track a show or movie and its next release shows up here.")
                 .font(.subheadline)

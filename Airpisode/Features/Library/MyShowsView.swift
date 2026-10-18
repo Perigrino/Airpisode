@@ -18,12 +18,6 @@ struct MyShowsView: View {
                     PageHeader(title: "My Shows",
                                subtitle: shows.isEmpty ? "Track your first show from Discover"
                                                        : "\(shows.count) show\(shows.count == 1 ? "" : "s") tracked")
-                    HistorySection(
-                        items: appState.library.releasedUnwatchedEpisodes(),
-                        onMarkWatched: { item in
-                            appState.setEpisodeWatched(true, episode: item.episode, titleID: item.title.id)
-                        }
-                    )
                     if shows.isEmpty {
                         emptyState
                     } else {

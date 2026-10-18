@@ -47,10 +47,12 @@ extension Library {
                 if let release = (movieReleases[entry.id] ?? [])
                     .filter({ ($0.date ?? .distantPast) >= now })
                     .min(by: { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }) {
+                    // Format + region, matching the Released-and-waiting card, so a movie that
+                    // appears both places (e.g. past physical + future digital) is never ambiguous.
                     items.append(UpcomingItem(
                         title: title,
                         date: release.date,
-                        label: release.kind.label,
+                        label: "\(release.kind.label) · \(release.region)",
                         isTimed: release.hasTime
                     ))
                 }

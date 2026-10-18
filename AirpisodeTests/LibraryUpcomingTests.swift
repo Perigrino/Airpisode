@@ -54,7 +54,7 @@ final class LibraryUpcomingTests: XCTestCase {
         XCTAssertEqual(items.count, 2)
         let movie = items.first { $0.title.id == "movie-200" }
         XCTAssertEqual(movie?.isTimed, false)
-        XCTAssertEqual(movie?.label, "Digital")
+        XCTAssertEqual(movie?.label, "Digital · US")
         // Sorted by date: episode (day 1) before movie (day 5).
         XCTAssertEqual(items.first?.title.id, "tv-100")
     }
@@ -72,7 +72,7 @@ final class LibraryUpcomingTests: XCTestCase {
         XCTAssertEqual(items.count, 1)
         XCTAssertEqual(items[0].title.id, "movie-200")
         XCTAssertEqual(items[0].isTimed, true)
-        XCTAssertEqual(items[0].label, "Theatrical")
+        XCTAssertEqual(items[0].label, "Theatrical · US")
     }
 
     func testUpcomingReleasesUsesNextAiringSeasonPremiere() {

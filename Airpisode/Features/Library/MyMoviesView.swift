@@ -18,12 +18,6 @@ struct MyMoviesView: View {
                     PageHeader(title: "My Movies",
                                subtitle: movies.isEmpty ? "Track your first movie from Discover"
                                                         : "\(movies.count) movie\(movies.count == 1 ? "" : "s") tracked")
-                    HistorySection(
-                        items: appState.library.releasedUnwatchedMovies(),
-                        onMarkWatched: { item in
-                            appState.setMovieWatched(true, titleID: item.title.id)
-                        }
-                    )
                     if movies.isEmpty {
                         emptyState
                     } else {

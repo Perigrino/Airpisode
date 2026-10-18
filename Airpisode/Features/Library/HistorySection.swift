@@ -15,6 +15,7 @@ extension ReleasedMovie: HistoryItem {}
 /// Shared by My Shows (episodes) and My Movies (movies). Hides itself when empty.
 struct HistorySection<Item: HistoryItem>: View {
     let items: [Item]
+    var heading = "Aired"
     let onMarkWatched: (Item) -> Void
 
     private enum Bucket: String, CaseIterable, Identifiable {
@@ -53,7 +54,7 @@ struct HistorySection<Item: HistoryItem>: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("History")
+            Text(heading)
                 .font(.title3)
                 .fontWeight(.semibold)
             Text("Released · not watched yet")

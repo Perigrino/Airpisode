@@ -137,8 +137,12 @@ final class AppState: ObservableObject {
     /// `force` bypasses the staleness TTL so a manual refresh always hits the network.
     /// `animated` keeps the minimum-visible spinner for user-initiated refreshes; background
     /// passes use `false` so an idle hour never flashes the window's spinner.
-    func runFullRefresh(force: Bool = true, animated: Bool = true) async {
-        guard !isRefreshing else { return }
+    /// Returns how many tracked titles could not be refreshed (an unreachable network leaves
+    /// their previous `lastRefreshed` in place), so the background sweep can tell a fully
+    /// successful pass from an offline one. The spinner-hold sleep only runs when `animated`.
+    @discardableResult
+    func runFullRefresh(force: Bool = true, animated: Bool = true) async -> Int {
+        guard !isRefreshing else { return 0 }
         isRefreshing = true
         let started = Date()
 
@@ -147,7 +151,12 @@ final class AppState: ObservableObject {
         _ = await engine.refreshIfNeeded(library: &snapshot, now: .now, force: force)
         library = snapshot
         try? await store.save(library)
-        let failed = snapshot.entries.filter { snapshot.titles[$0.id]?.lastRefreshed == nil }.count
+        // A title still carrying a pre-sweep `lastRefreshed` was not re-fetched (offline pass).
+        // Titles without loaded data are ignored so a data-less entry can never block forever.
+        let failed = snapshot.entries.filter { entry in
+            guard let title = snapshot.titles[entry.id] else { return false }
+            return (title.lastRefreshed ?? .distantPast) < started
+        }.count
         lastRefreshError = failed > 0
             ? "Couldn't refresh \(failed) title\(failed == 1 ? "" : "s"). Will retry automatically."
             : nil
@@ -161,6 +170,7 @@ final class AppState: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64((0.6 - elapsed) * 1_000_000_000))
         }
         isRefreshing = false
+        return failed
     }
 
     func refreshTitle(_ titleID: String) async {
@@ -198,15 +208,24 @@ final class AppState: ObservableObject {
     // MARK: - Background refresh
 
     private var backgroundRefreshTicker: Timer?
-    /// Bumped once per background pass so tests can observe the ticker without network.
+    /// Bumped once per heartbeat so tests can observe the ticker without network.
     private(set) var backgroundRefreshTicks = 0
 
-    /// The process now outlives its window, and these passes are what keep alerts accurate while
-    /// it does: each pass refreshes only titles whose staleness TTL elapsed (6h inside 14 days
-    /// of an airing, 24h inside 60 days) and re-schedules their notifications, so every tracked
-    /// title still contacts TMDB at least once a day. The timer lives on AppState, not on a
-    /// view, so ticks keep firing while the window is closed. Safe to repeat: the guard makes
-    /// the first call the only one that schedules.
+    /// Local hour the once-per-day sweep anchors at — early enough that TMDB already knows
+    /// today's air times, and always evaluated in the user's own time zone via their calendar.
+    static let dailySweepStartHour = 6
+
+    /// The morning slot the last daily sweep covered (nil until one has run).
+    var lastDailySweepSlot: Date?
+
+    /// The process now outlives its window, and this ticker keeps the To Watch page fresh with
+    /// at most ONE network sweep per local day: shortly after the 6 AM anchor in the user's own
+    /// time zone, every tracked title is re-fetched (force) and its notifications re-scheduled,
+    /// so release dates and just-aired entries stay current without hammering TMDB. Launching
+    /// after the anchor on a day with no sweep yet sweeps right away. A repeating Timer cannot
+    /// be trusted across sleep/wake, so the heartbeat only tags due-ness; each heartbeat also
+    /// counts in `backgroundRefreshTicks`. Safe to repeat: the guard makes the first call the
+    /// only one that schedules.
     func startBackgroundRefresh(every: TimeInterval = 3_600) {
         guard backgroundRefreshTicker == nil else { return }
         let ticker = Timer(timeInterval: every, repeats: true) { [weak self] _ in
@@ -225,9 +244,33 @@ final class AppState: ObservableObject {
         backgroundRefreshTicker = nil
     }
 
-    private func tickBackgroundRefresh() async {
+    /// The 6 AM (local) morning slot that contains `date`.
+    func dailySweepSlot(for date: Date, in calendar: Calendar = .current) -> Date? {
+        calendar.date(
+            bySettingHour: Self.dailySweepStartHour, minute: 0, second: 0,
+            of: date, matchingPolicy: .nextTime
+        )
+    }
+
+    /// Due when the current morning slot has passed but no sweep has run for it yet.
+    func isDailySweepDue(now: Date, in calendar: Calendar = .current) -> Bool {
+        guard let slot = dailySweepSlot(for: now, in: calendar) else { return false }
+        guard now >= slot else { return false } // hours before the morning anchor: not yet
+        return slot != lastDailySweepSlot
+    }
+
+    func tickBackgroundRefresh(now: Date = .now, in calendar: Calendar = .current) async {
         backgroundRefreshTicks += 1
-        await runFullRefresh(force: false, animated: false)
+        // A user refresh in flight could collide with the sweep's choices; skip this heartbeat
+        // entirely — the next hour covers it.
+        guard !isRefreshing, isDailySweepDue(now: now, in: calendar) else { return }
+        let failed = await runFullRefresh(force: true, animated: false)
+        // Stamp the slot only on a fully successful sweep. When the network was unreachable the
+        // slot stays unstamped, and the next hourly heartbeat retries automatically — a 6 AM
+        // attempt made while offline lands as soon as connectivity returns (e.g. 8 AM online).
+        if failed == 0 {
+            lastDailySweepSlot = dailySweepSlot(for: now, in: calendar)
+        }
     }
 
     // MARK: - Notifications
