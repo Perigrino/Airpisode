@@ -256,6 +256,13 @@ struct TitleDetailContent: View {
                 selectionBar(episodes: episodes)
             }
 
+            if episodes.isEmpty {
+                seasonEmptyCard(
+                    for: title,
+                    season: selectedSeason ?? seasons.last ?? 0
+                )
+            }
+
             ForEach(episodes) { episode in
                 EpisodeRowView(
                     episode: episode,
@@ -274,6 +281,33 @@ struct TitleDetailContent: View {
                 )
             }
         }
+    }
+
+    /// Graceful placeholder for a season TMDB has listed but that carries no episodes yet
+    /// (typically an announced-but-not-scheduled season). Mentions the premiere when known.
+    private func seasonEmptyCard(for title: Title, season: Int) -> some View {
+        let airing = title.nextAiring
+        let headline: String
+        let detail: String
+        if let date = airing?.airDate, airing?.seasonNumber == season {
+            headline = "Season \(season) premieres \(date.formatted(date: .abbreviated, time: .omitted))"
+            detail = "Episodes will appear here as soon as they're listed."
+        } else {
+            headline = "No episodes listed yet"
+            detail = "Season \(season) hasn't been announced. Check back after the next daily refresh."
+        }
+        return HStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.title3)
+                .foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(headline).font(.callout).fontWeight(.medium)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Theme.chip))
     }
 
     // MARK: - Movie releases
