@@ -28,6 +28,7 @@ protocol TMDBClientProtocol: Sendable {
     func similar(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult]
     func recommendations(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult]
     func credits(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBCastMember]
+    func person(tmdbID: Int) async throws -> TMDBPersonDetail
 }
 
 struct TMDBClient: TMDBClientProtocol {
@@ -99,5 +100,8 @@ struct TMDBClient: TMDBClientProtocol {
     func credits(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBCastMember] {
         let page: TMDBCreditsResponse = try await get("\(mediaType.rawValue)/\(tmdbID)/credits")
         return page.cast
+    }
+    func person(tmdbID: Int) async throws -> TMDBPersonDetail {
+        try await get("person/\(tmdbID)")
     }
 }

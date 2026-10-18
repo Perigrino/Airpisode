@@ -113,6 +113,19 @@ struct MyMoviesView: View {
     }
 
     private func nextLabel(for title: Title) -> String? {
+        let releaseLabel = upcomingReleaseLabel(for: title)
+        if releaseLabel != nil { return releaseLabel }
+        // Not in the release-dates payload (nothing tracked there) — fall back to the
+        // movie's own release date while it's still in the future.
+        if let date = title.firstAirDate, date >= .now {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d, yyyy"
+            return "Release: \(formatter.string(from: date))"
+        }
+        return nil
+    }
+
+    private func upcomingReleaseLabel(for title: Title) -> String? {
         guard let release = (appState.library.movieReleases[title.id] ?? [])
             .filter({ ($0.date ?? .distantPast) >= .now })
             .min(by: { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }),

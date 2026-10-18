@@ -17,6 +17,8 @@ final class StubTMDBClient: TMDBClientProtocol, @unchecked Sendable {
     var recommendationTitles: [String: [TMDBSearchResult]] = [:]
     var recommendationRequests: [String] = []
     var creditsResult: [TMDBCastMember] = []
+    var personResult: TMDBPersonDetail?
+    var personCallCount = 0
 
     /// `recommendations`/`similar` are called concurrently by RecommendationEngine's task group,
     /// so recorded requests need a lock or appends get lost.
@@ -60,6 +62,12 @@ final class StubTMDBClient: TMDBClientProtocol, @unchecked Sendable {
 
     func credits(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBCastMember] {
         creditsResult
+    }
+
+    func person(tmdbID: Int) async throws -> TMDBPersonDetail {
+        personCallCount += 1
+        guard let personResult else { throw URLError(.badServerResponse) }
+        return personResult
     }
 
     func recommendations(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {

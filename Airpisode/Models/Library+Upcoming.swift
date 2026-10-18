@@ -33,6 +33,15 @@ extension Library {
                         label: "S\(episode.seasonNumber)E\(episode.episodeNumber) · \(episode.name)",
                         isTimed: false  // TMDB episode air dates are date-only
                     ))
+                } else if let airing = title.nextAiring, let date = airing.airDate, date >= now {
+                    // No fetched upcoming episode (e.g. the next season hasn't started), but
+                    // TMDB already knows when the next one airs.
+                    items.append(UpcomingItem(
+                        title: title,
+                        date: date,
+                        label: "S\(airing.seasonNumber)E\(airing.episodeNumber) · \(airing.name)",
+                        isTimed: false
+                    ))
                 }
             case .movie:
                 if let release = (movieReleases[entry.id] ?? [])

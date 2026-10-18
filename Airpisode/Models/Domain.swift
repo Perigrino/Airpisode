@@ -25,6 +25,9 @@ struct Title: Codable, Identifiable, Hashable {
     var tvStatus: String?
     var seasons: [SeasonSummary]
     var lastRefreshed: Date?
+    /// TMDB's cross-show "next episode to air" — can be a future season's premiere even
+    /// when that season's episodes aren't fetched yet. nil when TMDB knows nothing new.
+    var nextAiring: Episode? = nil
 }
 
 struct Episode: Codable, Identifiable, Hashable {

@@ -8,6 +8,11 @@ final class AppStateLibraryTests: XCTestCase {
         return AppState(store: LibraryStore(directory: dir), tmdb: StubTMDBClient())
     }
 
+    private func makeSUT(tmdb: StubTMDBClient) -> AppState {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        return AppState(store: LibraryStore(directory: dir), tmdb: tmdb)
+    }
+
     private func sampleTitle(tmdbID: Int = 100, mediaType: MediaType = .tv) -> Title {
         Title(tmdbID: tmdbID, mediaType: mediaType, name: "Severance", overview: "", posterPath: nil, firstAirDate: nil, tvStatus: nil, seasons: [], lastRefreshed: nil)
     }
@@ -154,5 +159,52 @@ final class AppStateLibraryTests: XCTestCase {
         app.removeFromLibrary("tv-100")
 
         XCTAssertTrue(app.library.watchedEpisodes.isEmpty)
+    }
+
+    func testRefreshTitleCapturesNextAiring() async {
+        let stub = StubTMDBClient()
+        stub.tvDetailResult = TMDBTVDetail(
+            id: 100, name: "Severance", overview: nil, posterPath: nil, firstAirDate: nil,
+            status: "Hiatus",
+            seasons: [TMDBSeasonSummary(seasonNumber: 1, episodeCount: 2, airDate: nil)],
+            nextEpisodeToAir: TMDBTVEpisode(
+                episodeNumber: 3, seasonNumber: 3, name: "Episode 3",
+                overview: nil, airDate: "2099-01-15", stillPath: nil
+            )
+        )
+        stub.seasons[1] = TMDBSeason(seasonNumber: 1, episodes: [
+            TMDBTVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Good News", overview: nil, airDate: "2022-02-18", stillPath: nil),
+            TMDBTVEpisode(episodeNumber: 2, seasonNumber: 1, name: "Half Loop", overview: nil, airDate: "2022-02-25", stillPath: nil),
+        ])
+        let app = AppState(store: LibraryStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)), tmdb: stub)
+        app.addToLibrary(sampleTitle())
+
+        await app.refreshTitle("tv-100")
+
+        let airing = app.library.titles["tv-100"]?.nextAiring
+        XCTAssertEqual(airing?.seasonNumber, 3)
+        XCTAssertEqual(airing?.episodeNumber, 3)
+        XCTAssertEqual(airing?.name, "Episode 3")
+    }
+
+    func testFetchPersonReturnsDetailFromClient() async {
+        let stub = StubTMDBClient()
+        stub.personResult = TMDBPersonDetail(
+            name: "Adam Scott",
+            profilePath: nil,
+            knownForDepartment: "Acting",
+            birthday: "1973-04-03",
+            deathday: nil,
+            placeOfBirth: "Santa Cruz, California, USA",
+            biography: "Known for comedy."
+        )
+        let app = makeSUT(tmdb: stub)
+
+        let person = await app.fetchPerson(tmdbID: 5)
+
+        XCTAssertEqual(person?.name, "Adam Scott")
+        XCTAssertEqual(person?.knownForDepartment, "Acting")
+        XCTAssertEqual(person?.placeOfBirth, "Santa Cruz, California, USA")
+        XCTAssertEqual(stub.personCallCount, 1)
     }
 }

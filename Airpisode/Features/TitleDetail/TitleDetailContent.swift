@@ -11,6 +11,7 @@ struct TitleDetailContent: View {
     @State private var selectedSeason: Int?
     @State private var previewTitle: Title?
     @State private var cast: [TMDBCastMember] = []
+    @State private var selectedCastID: Int?
 
     private var titleID: String { "\(mediaType.rawValue)-\(tmdbID)" }
     private var title: Title? { appState.library.titles[titleID] }
@@ -235,8 +236,9 @@ struct TitleDetailContent: View {
         } else {
             episodeHeader
 
+            // Default to the newest season; the user can pick an earlier one freely.
             Picker("Season", selection: Binding(
-                get: { selectedSeason ?? seasons.first },
+                get: { selectedSeason ?? seasons.last },
                 set: { selectedSeason = $0 }
             )) {
                 ForEach(seasons, id: \.self) { season in
@@ -247,7 +249,7 @@ struct TitleDetailContent: View {
             .labelsHidden()
 
             let episodes = (appState.library.episodes[titleID] ?? [])
-                .filter { $0.seasonNumber == (selectedSeason ?? seasons.first) }
+                .filter { $0.seasonNumber == (selectedSeason ?? seasons.last) }
                 .sorted { $0.episodeNumber < $1.episodeNumber }
 
             if isSelectingEpisodes {
@@ -332,11 +334,26 @@ struct TitleDetailContent: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(cast.prefix(20), id: \.id) { member in
-                        CastMemberView(member: member)
+                        castCell(member)
                     }
                 }
             }
         }
+    }
+
+    /// One cast cell with the person popover attached. Kept as its own function so the
+    /// compiler does not have to type-check the whole section at once.
+    private func castCell(_ member: TMDBCastMember) -> some View {
+        let isPresented = Binding(
+            get: { selectedCastID == member.id },
+            set: { if !$0 { selectedCastID = nil } }
+        )
+        return CastMemberView(member: member)
+            .hoverLift()
+            .onTapGesture { selectedCastID = member.id }
+            .popover(isPresented: isPresented, arrowEdge: .bottom) {
+                PersonPopoverView(member: member, appState: appState)
+            }
     }
 
     // MARK: - Helpers

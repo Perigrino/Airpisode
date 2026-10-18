@@ -15,7 +15,8 @@ enum TMDBMapper {
             firstAirDate: detail.firstAirDate.flatMap(parseDate),
             tvStatus: detail.status,
             seasons: detail.seasons.map { SeasonSummary(seasonNumber: $0.seasonNumber, episodeCount: $0.episodeCount, airDate: $0.airDate.flatMap(parseDate)) },
-            lastRefreshed: nil
+            lastRefreshed: nil,
+            nextAiring: detail.nextEpisodeToAir.map { episode(from: $0, tvID: detail.id) }
         )
     }
 
@@ -34,17 +35,19 @@ enum TMDBMapper {
     }
 
     static func episodes(_ season: TMDBSeason, tvID: Int) -> [Episode] {
-        season.episodes.map { ep in
-            Episode(
-                tmdbID: tvID,
-                seasonNumber: ep.seasonNumber,
-                episodeNumber: ep.episodeNumber,
-                name: ep.name,
-                overview: ep.overview,
-                airDate: ep.airDate.flatMap(parseDate),
-                stillPath: ep.stillPath
-            )
-        }
+        season.episodes.map { episode(from: $0, tvID: tvID) }
+    }
+
+    private static func episode(from ep: TMDBTVEpisode, tvID: Int) -> Episode {
+        Episode(
+            tmdbID: tvID,
+            seasonNumber: ep.seasonNumber,
+            episodeNumber: ep.episodeNumber,
+            name: ep.name,
+            overview: ep.overview,
+            airDate: ep.airDate.flatMap(parseDate),
+            stillPath: ep.stillPath
+        )
     }
 
     /// Maps a movie's release dates for `region`. TMDB can list several dates of the

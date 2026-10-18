@@ -74,4 +74,39 @@ final class LibraryUpcomingTests: XCTestCase {
         XCTAssertEqual(items[0].isTimed, true)
         XCTAssertEqual(items[0].label, "Theatrical")
     }
+
+    func testUpcomingReleasesUsesNextAiringSeasonPremiere() {
+        var lib = makeLibrary()
+        // Season ended; that season's episodes aired, and the next season isn't fetched
+        // (or TMDB has no episodes for it yet) — but TMDB knows the premiere date.
+        lib.titles["tv-100"]?.nextAiring = Episode(
+            tmdbID: 100, seasonNumber: 7, episodeNumber: 1,
+            name: "Season 7 Premiere", overview: nil, airDate: future(120), stillPath: nil
+        )
+        let items = lib.upcomingReleases(now: now)
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].title.id, "tv-100")
+        XCTAssertEqual(items[0].label, "S7E1 · Season 7 Premiere")
+        XCTAssertEqual(items[0].isTimed, false)
+    }
+
+    func testNextAiringIgnoredWhenPastOrWhenFetchedEpisodeCovers() {
+        var lib = makeLibrary()
+        // Past date (e.g. the last aired episode of an ended show) → no upcoming item.
+        lib.titles["tv-100"]?.nextAiring = Episode(
+            tmdbID: 100, seasonNumber: 2, episodeNumber: 8,
+            name: "Finale", overview: nil, airDate: future(-30), stillPath: nil
+        )
+        XCTAssertTrue(lib.upcomingReleases(now: now).filter { $0.title.id == "tv-100" }.isEmpty)
+        // A fetched upcoming episode wins over the raw nextAiring stub.
+        lib.titles["tv-100"]?.nextAiring = Episode(
+            tmdbID: 100, seasonNumber: 7, episodeNumber: 1,
+            name: "Season 7 Premiere", overview: nil, airDate: future(120), stillPath: nil
+        )
+        lib.episodes["tv-100"] = [
+            Episode(tmdbID: 100, seasonNumber: 2, episodeNumber: 9, name: "Soon", overview: nil, airDate: future(3), stillPath: nil)
+        ]
+        let items = lib.upcomingReleases(now: now)
+        XCTAssertEqual(items.first { $0.title.id == "tv-100" }?.label, "S2E9 · Soon")
+    }
 }

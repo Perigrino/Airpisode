@@ -113,8 +113,19 @@ struct MyShowsView: View {
     }
 
     private func nextLabel(for title: Title) -> String? {
-        guard let episode = appState.library.nextEpisode(forTitle: title.id) else { return nil }
-        let when = episode.airDate.map { EpisodeRowView.dayFormatter.string(from: $0) } ?? "TBD"
-        return "Next: S\(episode.seasonNumber)E\(episode.episodeNumber) · \(when)"
+        if let episode = appState.library.nextEpisode(forTitle: title.id) {
+            let when = episode.airDate.map { EpisodeRowView.dayFormatter.string(from: $0) } ?? "TBD"
+            return "Next: S\(episode.seasonNumber)E\(episode.episodeNumber) · \(when)"
+        }
+        // Season gap: the current season is over, but TMDB may already know the next
+        // airing — often the premiere of a season months away.
+        if let airing = title.nextAiring, let date = airing.airDate, date >= .now {
+            let when = EpisodeRowView.dayFormatter.string(from: date)
+            if airing.episodeNumber == 1 {
+                return "Season \(airing.seasonNumber) · \(when)"
+            }
+            return "Next: S\(airing.seasonNumber)E\(airing.episodeNumber) · \(when)"
+        }
+        return nil
     }
 }

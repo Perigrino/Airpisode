@@ -128,6 +128,11 @@ final class AppState: ObservableObject {
         (try? await tmdb.credits(mediaType: mediaType, tmdbID: tmdbID)) ?? []
     }
 
+    /// Fetches basic person data for the cast popover.
+    func fetchPerson(tmdbID: Int) async -> TMDBPersonDetail? {
+        try? await tmdb.person(tmdbID: tmdbID)
+    }
+
     /// Refreshes tracked titles through the ReleaseEngine and reschedules alerts.
     /// `force` bypasses the staleness TTL so a manual refresh always hits the network.
     /// `animated` keeps the minimum-visible spinner for user-initiated refreshes; background

@@ -38,10 +38,12 @@ struct TMDBTVDetail: Decodable {
     let firstAirDate: String?
     let status: String?
     let seasons: [TMDBSeasonSummary]
+    var nextEpisodeToAir: TMDBTVEpisode? = nil
     enum CodingKeys: String, CodingKey {
         case id, name, overview, status, seasons
         case posterPath = "poster_path"
         case firstAirDate = "first_air_date"
+        case nextEpisodeToAir = "next_episode_to_air"
     }
 }
 struct TMDBSeasonSummary: Decodable {
@@ -123,6 +125,24 @@ struct TMDBCastMember: Decodable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, name, character
         case profilePath = "profile_path"
+    }
+}
+/// Basic person data for the cast popover (`GET /person/{id}`).
+struct TMDBPersonDetail: Decodable {
+    let name: String
+    var profilePath: String? = nil
+    var knownForDepartment: String? = nil
+    var birthday: String? = nil
+    var deathday: String? = nil
+    var placeOfBirth: String? = nil
+    var biography: String? = nil
+    enum CodingKeys: String, CodingKey {
+        case name
+        case profilePath = "profile_path"
+        case knownForDepartment = "known_for_department"
+        case birthday, deathday
+        case placeOfBirth = "place_of_birth"
+        case biography
     }
 }
 struct TMDBReleaseDatesResponse: Decodable {
