@@ -230,7 +230,15 @@ struct TitleDetailContent: View {
 
     @ViewBuilder
     private func tvEpisodeList(for title: Title) -> some View {
-        let seasons = title.seasons.filter { $0.seasonNumber > 0 }.map(\.seasonNumber).sorted()
+        // Only seasons TMDB actually announced: listed episodes, a premiere date, or the
+        // "next episode to air" points at it. Dangling zero-episode records without either
+        // would misrepresent an unannounced season as scheduled.
+        let seasons = title.seasons.filter { season in
+            guard season.seasonNumber > 0 else { return false }
+            return season.episodeCount > 0
+                || season.airDate != nil
+                || season.seasonNumber == title.nextAiring?.seasonNumber
+        }.map(\.seasonNumber).sorted()
         if seasons.isEmpty {
             Text("No seasons listed").foregroundStyle(.secondary)
         } else {
