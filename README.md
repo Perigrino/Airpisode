@@ -1,5 +1,7 @@
 # Airpisode
 
+![CI](https://github.com/Perigrino/Airpisode/actions/workflows/ci.yml/badge.svg)
+
 Never miss what's next.
 
 Airpisode is a macOS app that tracks when your TV shows and movies come out. It reads metadata from TMDB, keeps your watchlist on your Mac, and notifies you before a release. No account, no server, no sync.
@@ -72,6 +74,10 @@ Build a disk image with no key baked in:
 ```
 
 The image lands in `dist/`. See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
+
+The same steps run automatically on GitHub Actions: pushes to `main` and pull
+requests execute the test suite keylessly, and pushing a `v*` tag builds the
+DMG and publishes it as a GitHub release with its sha256 in the notes.
 
 ## How it works
 

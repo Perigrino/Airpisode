@@ -1,0 +1,55 @@
+# On a pushed v* tag: run the test suite, build the keyless DMG, and publish it
+# to a GitHub release with its sha256 checksum in the notes.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release (macOS)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Prepare key placeholder
+        run: |
+          cp Airpisode/TMDBKey.xcconfig.example Airpisode/TMDBKey.xcconfig
+          sed -i '' 's/REPLACE_ME//' Airpisode/TMDBKey.xcconfig
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Run tests
+        run: xcodebuild test -project Airpisode.xcodeproj -scheme Airpisode -destination 'platform=macOS'
+
+      - name: Build DMG
+        run: ./Scripts/build-dmg.sh
+
+      - name: Checksum and release notes
+        run: |
+          DMG=$(ls dist/Airpisode-*.dmg)
+          SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
+          {
+            echo "Download the DMG, open it, and drag Airpisode to Applications."
+            echo "The bundle ships keyless: enter your own TMDB key on first launch."
+            echo ""
+            echo "---"
+            echo ""
+            echo "**\`$(basename "$DMG")\`** \`${SHA}\` (sha256)"
+          } > dist/notes.md
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Airpisode ${{ github.ref_name }}
+          body_path: dist/notes.md
+          files: dist/Airpisode-*.dmg
