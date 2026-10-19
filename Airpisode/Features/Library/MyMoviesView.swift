@@ -3,20 +3,13 @@ import SwiftUI
 struct MyMoviesView: View {
     @EnvironmentObject private var appState: AppState
     @State private var expandedID: String?
-    @State private var searchText = ""
-    @State private var movieFilter: Library.MovieFilter = .all
-    @State private var sortBy: Library.LibrarySort = .name
-    @FocusState private var searchFocused: Bool
-
-    private var trackedMovies: [Title] {
-        appState.library.entries
-            .filter { $0.mediaType == .movie }
-            .compactMap { appState.library.titles[$0.id] }
-    }
 
     private var movies: [Title] {
         appState.library.orderedWithPinnedFirst(
-            appState.library.queryMovies(searchText: searchText, filter: movieFilter, sort: sortBy)
+            appState.library.entries
+                .filter { $0.mediaType == .movie }
+                .compactMap { appState.library.titles[$0.id] }
+                .sorted { $0.name < $1.name }
         )
     }
 
@@ -24,19 +17,13 @@ struct MyMoviesView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    let tracked = trackedMovies
                     PageHeader(title: "My Movies",
-                               subtitle: subtitle(trackedCount: tracked.count, visibleCount: movies.count))
-                    if tracked.isEmpty {
+                               subtitle: subtitle(trackedCount: movies.count))
+                    if movies.isEmpty {
                         emptyState
                     } else {
-                        controls
-                        if movies.isEmpty {
-                            noMatches
-                        } else {
-                            ForEach(movies) { title in
-                                card(title).id(title.id)
-                            }
+                        ForEach(movies) { title in
+                            card(title).id(title.id)
                         }
                     }
                 }
@@ -110,66 +97,9 @@ struct MyMoviesView: View {
         .hoverLift()
     }
 
-    /// Search + sort + filter row. The invisible ⌘F button keeps search one shortcut away.
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                TextField("Search movies", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($searchFocused)
-                    .help("Filter by title (⌘F)")
-                Menu {
-                    Picker("Sort", selection: $sortBy) {
-                        ForEach(Library.LibrarySort.allCases) { sort in
-                            Text(sort.label).tag(sort)
-                        }
-                    }
-                } label: {
-                    Label(sortBy.label, systemImage: "arrow.up.arrow.down")
-                }
-                .fixedSize()
-            }
-            HStack(spacing: 6) {
-                ForEach(Library.MovieFilter.allCases) { filter in
-                    FilterChip(title: filter.label, isSelected: movieFilter == filter) {
-                        movieFilter = filter
-                    }
-                }
-            }
-        }
-        .background(
-            Button("Find") { searchFocused = true }
-                .keyboardShortcut("f", modifiers: .command)
-                .opacity(0)
-                .accessibilityHidden(true)
-        )
-    }
-
-    private func subtitle(trackedCount: Int, visibleCount: Int) -> String {
+    private func subtitle(trackedCount: Int) -> String {
         if trackedCount == 0 { return "Track your first movie from Discover" }
-        if visibleCount == trackedCount {
-            return "\(trackedCount) movie\(trackedCount == 1 ? "" : "s") tracked"
-        }
-        return "\(visibleCount) of \(trackedCount) movie\(trackedCount == 1 ? "" : "s")"
-    }
-
-    private var noMatches: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.title3)
-                .foregroundStyle(.tertiary)
-            Text("No matches")
-                .font(.headline)
-            Button("Clear search & filters") {
-                searchText = ""
-                movieFilter = .all
-            }
-            .buttonStyle(.plain)
-            .font(.caption)
-            .foregroundStyle(Theme.accent)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        return "\(trackedCount) movie\(trackedCount == 1 ? "" : "s") tracked"
     }
 
     private var emptyState: some View {
