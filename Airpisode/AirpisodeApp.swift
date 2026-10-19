@@ -50,11 +50,30 @@ struct AirpisodeApp: App {
                 .environmentObject(appState)
                 .preferredColorScheme(.dark)
         }
+        MenuBarExtra {
+            MenuBarWatchList()
+                .environmentObject(appState)
+                .preferredColorScheme(.dark)
+        } label: {
+            Image(systemName: "bell")
+        }
+        .menuBarExtraStyle(.window)
     }
+}
+
+/// Forwards notification action taps from the UN delegate to AppState. AppDelegate must own
+/// the single UNUserNotificationCenter delegate, so the app state installs itself here
+/// instead of becoming a second delegate.
+protocol NotificationActionHandling: AnyObject {
+    @MainActor
+    func handleNotificationAction(identifier: String, titleID: String, kind: String, key: String?)
 }
 
 /// Set as UNUserNotificationCenter delegate so banners show even while the app is frontmost.
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    /// Action handlers install themselves from `AppState.init`; a weak static pairs with the
+    /// singleton UN delegate slot above.
+    static weak var actionHandler: NotificationActionHandling?
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
         // An "always"-style system scroller reserves a gutter on the page's right edge, which both
@@ -62,6 +81,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // therefore always scrollers overlay-style; the window sweep and the live-scroll observer
         // keep even that flash from drawing.
         UserDefaults.standard.set("WhenScrolling", forKey: "AppleShowScrollBars")
+        // Banner buttons (Mark watched / Mute) never appear unless the categories are
+        // registered once at launch, before any alert schedules.
+        NotificationScheduler.registerAlertCategories()
     }
 
     /// Closing the window only hides it: the process keeps running in the background so the
@@ -83,6 +105,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound])
+    }
+
+    /// The one delegate slot also receives button taps on banners. An ordinary banner tap is
+    /// left alone (the system opens the window); Mark watched / Mute forward to AppState.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        defer { completionHandler() }
+        guard response.actionIdentifier != UNNotificationDefaultActionIdentifier else { return }
+        let info = response.notification.request.content.userInfo
+        // The delegate call is synchronous but AppState is main-actor isolated; hop over.
+        let identifier = response.actionIdentifier
+        let titleID = info["titleID"] as? String ?? ""
+        let kind = info["kind"] as? String ?? ""
+        let key = info["key"] as? String
+        let handler = Self.actionHandler
+        Task { @MainActor in
+            handler?.handleNotificationAction(identifier: identifier, titleID: titleID, kind: kind, key: key)
+        }
     }
 }
 

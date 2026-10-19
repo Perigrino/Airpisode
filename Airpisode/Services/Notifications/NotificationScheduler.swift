@@ -46,7 +46,9 @@ struct NotificationScheduler {
                         identifier: Self.preAlertID(titleID: title.id, key: key),
                         title: "\(title.name) — New Episode \(relativeDay(airDate, now: now))!",
                         body: episodeLabel(episode) + " — airs \(relativeDay(airDate, now: now).lowercased()) at \(Self.time(airDate))",
-                        fireDate: fire
+                        fireDate: fire,
+                        category: Self.episodeCategory,
+                        userInfo: ["titleID": title.id, "key": episode.id, "kind": "episode"]
                     )
                 }
             }
@@ -57,7 +59,9 @@ struct NotificationScheduler {
                         identifier: Self.imminentID(titleID: title.id, key: key),
                         title: "\(title.name) — Starting Soon!",
                         body: episodeLabel(episode) + " — airs at \(Self.time(airDate))",
-                        fireDate: fire
+                        fireDate: fire,
+                        category: Self.episodeCategory,
+                        userInfo: ["titleID": title.id, "key": episode.id, "kind": "episode"]
                     )
                 }
             }
@@ -72,7 +76,9 @@ struct NotificationScheduler {
                 identifier: Self.preAlertID(titleID: title.id, key: release.id),
                 title: "\(title.name) — \(release.kind.label) \(relativeDay(date, now: now))!",
                 body: "Available \(relativeDay(date, now: now).lowercased()) at \(Self.time(date))",
-                fireDate: fire
+                fireDate: fire,
+                category: Self.movieCategory,
+                userInfo: ["titleID": title.id, "key": release.id, "kind": "movie"]
             )
         }
     }
@@ -82,6 +88,29 @@ struct NotificationScheduler {
             [Self.preAlertID(titleID: titleID, key: $0), Self.imminentID(titleID: titleID, key: $0)]
         }
         client.removePending(withIdentifiers: ids)
+    }
+
+    // MARK: - Banner actions
+
+    static let markWatchedAction = "markWatched"
+    static let muteTitleAction = "muteTitle"
+    static let episodeCategory = "episodeAlert"
+    static let movieCategory = "movieAlert"
+
+    /// The banner's buttons: registered once at launch or the actions never appear. Actions
+    /// run in the background; the ordinary banner tap still opens the window.
+    static func registerAlertCategories() {
+        let mark = UNNotificationAction(identifier: markWatchedAction, title: "Mark watched", options: [])
+        let muteEpisode = UNNotificationAction(
+            identifier: muteTitleAction, title: "Mute this show", options: [.destructive]
+        )
+        let muteMovie = UNNotificationAction(
+            identifier: muteTitleAction, title: "Mute this movie", options: [.destructive]
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([
+            UNNotificationCategory(identifier: episodeCategory, actions: [mark, muteEpisode], intentIdentifiers: []),
+            UNNotificationCategory(identifier: movieCategory, actions: [mark, muteMovie], intentIdentifiers: []),
+        ])
     }
 
     // MARK: - Helpers
@@ -117,10 +146,15 @@ struct NotificationScheduler {
         "S\(episode.seasonNumber)E\(episode.episodeNumber) · \"\(episode.name)\""
     }
 
-    private func addAlert(identifier: String, title: String, body: String, fireDate: Date) async {
+    private func addAlert(
+        identifier: String, title: String, body: String, fireDate: Date,
+        category: String, userInfo: [String: String]
+    ) async {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
+        content.categoryIdentifier = category
+        content.userInfo = userInfo
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
         let request = UNNotificationRequest(
             identifier: identifier,

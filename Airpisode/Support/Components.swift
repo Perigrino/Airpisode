@@ -131,3 +131,26 @@ struct CastAvatar: View {
         }
     }
 }
+
+/// A filter-pill button — same visual as Chip, but tappable, filled when selected.
+struct FilterChip: View {
+    let title: String
+    let isSelected: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(isSelected ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Theme.chip))
+                )
+                .foregroundStyle(isSelected ? Color.white : Color.secondary)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}

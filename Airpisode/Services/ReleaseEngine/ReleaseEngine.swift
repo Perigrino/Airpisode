@@ -10,6 +10,9 @@ enum ReleaseChange: Equatable {
 /// Staleness tiers: release within 14d → 6h TTL; within 60d → 24h; else 7d.
 struct ReleaseEngine {
     let client: TMDBClientProtocol
+    /// Region release dates are fetched for. Defaults to the user's stored setting at
+    /// construction; tests pass an explicit region so they never depend on machine config.
+    var region: String = ConfigStore.defaultRegion
 
     func refreshIfNeeded(library: inout Library, now: Date, force: Bool = false) async -> [ReleaseChange] {
         var changes: [ReleaseChange] = []
@@ -40,7 +43,7 @@ struct ReleaseEngine {
                     let detail = try await client.movieDetail(id: entry.tmdbID)
                     var newTitle = TMDBMapper.title(from: detail)
                     let response = try await client.movieReleaseDates(id: entry.tmdbID)
-                    let region = ConfigStore.defaultRegion
+                    let region = self.region
                     let releases = TMDBMapper.movieReleases(response, movieID: entry.tmdbID, region: region)
                     changes += Self.diff(
                         old: library.movieReleases[titleID] ?? [], new: releases,

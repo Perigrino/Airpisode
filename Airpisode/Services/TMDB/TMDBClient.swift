@@ -25,6 +25,8 @@ protocol TMDBClientProtocol: Sendable {
     func season(tvID: Int, season: Int) async throws -> TMDBSeason
     func movieDetail(id: Int) async throws -> TMDBMovieDetail
     func movieReleaseDates(id: Int) async throws -> TMDBReleaseDatesResponse
+    func videos(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBVideo]
+    func watchProviders(mediaType: MediaType, tmdbID: Int) async throws -> TMDBWatchProvidersResponse
     func similar(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult]
     func recommendations(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult]
     func credits(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBCastMember]
@@ -77,6 +79,13 @@ struct TMDBClient: TMDBClientProtocol {
     }
     func movieReleaseDates(id: Int) async throws -> TMDBReleaseDatesResponse {
         try await get("movie/\(id)/release_dates")
+    }
+    func videos(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBVideo] {
+        let page: TMDBVideosResponse = try await get("\(mediaType.rawValue)/\(tmdbID)/videos")
+        return page.results
+    }
+    func watchProviders(mediaType: MediaType, tmdbID: Int) async throws -> TMDBWatchProvidersResponse {
+        try await get("\(mediaType.rawValue)/\(tmdbID)/watch/providers")
     }
     /// `/similar` and `/recommendations` share a response shape, and both omit media_type.
     private func mapped(_ page: TMDBRecommendationsResponse, mediaType: MediaType) -> [TMDBSearchResult] {

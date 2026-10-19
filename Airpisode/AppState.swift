@@ -37,6 +37,9 @@ final class AppState: ObservableObject {
         self.store = store
         self.tmdb = tmdb
         self.notifications = notifications
+        // The UN delegate is a singleton slot: install this state so banner action taps
+        // (Mark watched / Mute) reach the library mutations.
+        AppDelegate.actionHandler = self
     }
 
     func loadLibrary() async {
@@ -107,6 +110,29 @@ final class AppState: ObservableObject {
         save()
     }
 
+    /// Mutes (or unmutes) a title's alerts. Muting cancels everything already scheduled for
+    /// it; the title stays in the library and keeps feeding the To Watch page.
+    func setAlertsMuted(_ muted: Bool, titleID: String) {
+        guard let index = library.entries.firstIndex(where: { $0.id == titleID }) else { return }
+        library.entries[index].alertsMuted = muted
+        if muted {
+            let episodes = library.episodes[titleID] ?? []
+            let keys = episodes.map(\.id) + (library.movieReleases[titleID] ?? []).map(\.id)
+            notifications.cancelAll(forTitle: titleID, keys: keys)
+        } else {
+            reschedule(titleID: titleID)
+        }
+        save()
+    }
+
+    /// Pins (or unpins) a row to the top of its list. Display-only ordering — the entry keeps
+    /// its `addedAt`, so the Recently added sort still reads its true age.
+    func setPinned(_ pinned: Bool, titleID: String) {
+        guard let index = library.entries.firstIndex(where: { $0.id == titleID }) else { return }
+        library.entries[index].pinnedAt = pinned ? Date() : nil
+        save()
+    }
+
     // MARK: - Refresh
 
     /// Fetches a title's metadata without adding it to the library (used by the detail page before "Add").
@@ -131,6 +157,19 @@ final class AppState: ObservableObject {
     /// Fetches basic person data for the cast popover.
     func fetchPerson(tmdbID: Int) async -> TMDBPersonDetail? {
         try? await tmdb.person(tmdbID: tmdbID)
+    }
+
+    /// The title's best YouTube trailer URL, for the detail hero's Trailer button.
+    func fetchTrailer(tmdbID: Int, mediaType: MediaType) async -> URL? {
+        let videos = (try? await tmdb.videos(mediaType: mediaType, tmdbID: tmdbID)) ?? []
+        return videos.youTubeTrailer?.youTubeURL
+    }
+
+    /// Fetches the region's streaming offers ("Where to watch"). The region is an explicit
+    /// parameter so tests never read this Mac's config; the view passes the current setting.
+    func fetchWatchProviders(mediaType: MediaType, tmdbID: Int, region: String) async -> TMDBRegionProviders? {
+        let response = try? await tmdb.watchProviders(mediaType: mediaType, tmdbID: tmdbID)
+        return response?.region(region)
     }
 
     /// Refreshes tracked titles through the ReleaseEngine and reschedules alerts.
@@ -284,7 +323,7 @@ final class AppState: ObservableObject {
     }
 
     private func reschedule(titleID: String) {
-        guard let title = library.titles[titleID] else { return }
+        guard let title = library.titles[titleID], !library.isMuted(titleID) else { return }
         let episodes = library.episodes[titleID] ?? []
         let releases = library.movieReleases[titleID] ?? []
         let keys = episodes.map(\.id) + releases.map(\.id)
@@ -297,5 +336,28 @@ final class AppState: ObservableObject {
     private func save() {
         let snapshot = library
         Task { try? await store.save(snapshot) }
+    }
+}
+
+extension AppState: NotificationActionHandling {
+    /// Routes banner action taps: episode notifications mark that episode watched, movie
+    /// notifications mark the movie watched, and every category offers a one-tap mute.
+    @MainActor
+    func handleNotificationAction(identifier: String, titleID: String, kind: String, key: String?) {
+        switch identifier {
+        case NotificationScheduler.markWatchedAction:
+            if kind == "episode" {
+                guard let key,
+                      let episode = library.episodes[titleID]?.first(where: { $0.id == key })
+                else { break }
+                setEpisodeWatched(true, episode: episode, titleID: titleID)
+            } else if kind == "movie" {
+                setMovieWatched(true, titleID: titleID)
+            }
+        case NotificationScheduler.muteTitleAction:
+            setAlertsMuted(true, titleID: titleID)
+        default:
+            break
+        }
     }
 }

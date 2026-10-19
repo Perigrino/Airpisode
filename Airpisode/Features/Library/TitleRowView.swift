@@ -5,6 +5,8 @@ struct TitleRowView: View {
     let title: Title
     let nextLabel: String?
     var isExpanded = false
+    /// Small state badge (e.g. "Muted") rendered beside the media-type chip.
+    var badge: String? = nil
 
     var body: some View {
         HStack(spacing: 14) {
@@ -15,7 +17,12 @@ struct TitleRowView: View {
                     .font(.title3)
                     .fontWeight(.semibold)
                     .lineLimit(2)
-                Chip(text: title.mediaType == .tv ? "TV Show" : "Movie")
+                HStack(spacing: 6) {
+                    Chip(text: title.mediaType == .tv ? "TV Show" : "Movie")
+                    if let badge {
+                        Chip(text: badge)
+                    }
+                }
                 if let nextLabel {
                     HStack(spacing: 5) {
                         Image(systemName: "clock")

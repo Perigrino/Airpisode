@@ -9,6 +9,8 @@ final class StubTMDBClient: TMDBClientProtocol, @unchecked Sendable {
     var seasons: [Int: TMDBSeason] = [:]
     var movieDetailResult: TMDBMovieDetail?
     var releaseDatesResult: TMDBReleaseDatesResponse?
+    var videosResult: [TMDBVideo]?
+    var videosCallCount = 0
     var tvDetailCallCount = 0
     var movieDetailCallCount = 0
     var seasonCallNumbers: [Int] = []
@@ -50,6 +52,21 @@ final class StubTMDBClient: TMDBClientProtocol, @unchecked Sendable {
     func movieReleaseDates(id: Int) async throws -> TMDBReleaseDatesResponse {
         guard let releaseDatesResult else { throw URLError(.badServerResponse) }
         return releaseDatesResult
+    }
+
+    func videos(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBVideo] {
+        videosCallCount += 1
+        guard let videosResult else { throw URLError(.badServerResponse) }
+        return videosResult
+    }
+
+    var watchProvidersResult: TMDBWatchProvidersResponse?
+    var watchProvidersCallCount = 0
+
+    func watchProviders(mediaType: MediaType, tmdbID: Int) async throws -> TMDBWatchProvidersResponse {
+        watchProvidersCallCount += 1
+        guard let watchProvidersResult else { throw URLError(.badServerResponse) }
+        return watchProvidersResult
     }
 
     func similar(mediaType: MediaType, tmdbID: Int) async throws -> [TMDBSearchResult] {

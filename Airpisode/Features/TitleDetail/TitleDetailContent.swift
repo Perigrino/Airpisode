@@ -12,6 +12,9 @@ struct TitleDetailContent: View {
     @State private var previewTitle: Title?
     @State private var cast: [TMDBCastMember] = []
     @State private var selectedCastID: Int?
+    @State private var trailerURL: URL?
+    @State private var watchProviders: TMDBRegionProviders?
+    @State private var providersLoaded = false
 
     private var titleID: String { "\(mediaType.rawValue)-\(tmdbID)" }
     private var title: Title? { appState.library.titles[titleID] }
@@ -21,6 +24,9 @@ struct TitleDetailContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             hero
+            if providersLoaded {
+                WhereToWatchSection(providers: watchProviders, region: ConfigStore.defaultRegion)
+            }
             if let title {
                 if mediaType == .tv {
                     tvEpisodeList(for: title)
@@ -37,11 +43,17 @@ struct TitleDetailContent: View {
         .padding(.top, 4)
         .task(id: titleID) {
             async let castFetch: [TMDBCastMember] = appState.fetchCredits(tmdbID: tmdbID, mediaType: mediaType)
+            async let trailerFetch: URL? = appState.fetchTrailer(tmdbID: tmdbID, mediaType: mediaType)
+            async let providersFetch: TMDBRegionProviders? = appState.fetchWatchProviders(
+                mediaType: mediaType, tmdbID: tmdbID, region: ConfigStore.defaultRegion)
             if title != nil {
                 await appState.refreshTitle(titleID)
             } else {
                 previewTitle = await appState.fetchPreviewTitle(tmdbID: tmdbID, mediaType: mediaType)
             }
+            trailerURL = await trailerFetch
+            watchProviders = await providersFetch
+            providersLoaded = true
             cast = await castFetch
         }
     }
@@ -65,7 +77,19 @@ struct TitleDetailContent: View {
                         .lineLimit(6)
                 }
 
-                watchlistButton
+                HStack(spacing: 8) {
+                    watchlistButton
+                    if let url = trailerURL {
+                        Button {
+                            NSWorkspace.shared.open(url)
+                        } label: {
+                            Label("Trailer", systemImage: "play.rectangle.on.rectangle")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                        .help("Opens the trailer on YouTube")
+                    }
+                }
 
                 if let callout = nextCallout {
                     calloutView(callout)

@@ -166,3 +166,68 @@ struct TMDBReleaseDate: Decodable {
         case releaseDate = "release_date"
     }
 }
+
+/// A video from `GET /{movie,tv}/{id}/videos`. TMDB hosts most keys on YouTube.
+struct TMDBVideo: Decodable, Identifiable {
+    let id: String                   // TMDB's own video id, not the YouTube key
+    let key: String                  // YouTube video key
+    let name: String
+    let site: String                 // "YouTube"; other sites are ignored
+    let type: String                 // "Trailer" | "Teaser" | "Clip" | …
+    let official: Bool
+}
+
+struct TMDBVideosResponse: Decodable {
+    let results: [TMDBVideo]
+}
+
+extension Array where Element == TMDBVideo {
+    /// The best playable trailer: official trailers win, then any trailer, then a teaser.
+    /// Only YouTube is surfaced — that is where TMDB's commonly used keys live.
+    var youTubeTrailer: TMDBVideo? {
+        first { $0.site == "YouTube" && $0.type == "Trailer" && $0.official }
+            ?? first { $0.site == "YouTube" && $0.type == "Trailer" }
+            ?? first { $0.site == "YouTube" && $0.type == "Teaser" }
+    }
+}
+
+extension TMDBVideo {
+    var youTubeURL: URL {
+        URL(string: "https://youtube.com/watch?v=\(key)")!
+    }
+}
+
+// MARK: - Watch providers ("Where to watch")
+
+/// One TMDB streaming offer: a partner (id, name, logo) exactly as TMDB lists it.
+struct TMDBWatchProvider: Decodable, Identifiable {
+    var id: Int { providerID }
+    let providerID: Int
+    let name: String
+    var logoPath: String?
+
+    enum CodingKeys: String, CodingKey {
+        case providerID = "provider_id"
+        case name
+        case logoPath = "logo_path"
+    }
+}
+
+/// One country's offers from `GET /{movie,tv}/{id}/watch/providers`: a JustWatch link plus
+/// the partner lists per offer type (`flatrate` = streaming subscription).
+struct TMDBRegionProviders: Decodable {
+    var link: String?
+    var flatrate: [TMDBWatchProvider]? = nil
+    var rent: [TMDBWatchProvider]? = nil
+    var buy: [TMDBWatchProvider]? = nil
+}
+
+/// The full `results` map: region code → offers. Most titles cover a handful of countries.
+struct TMDBWatchProvidersResponse: Decodable {
+    let results: [String: TMDBRegionProviders]
+
+    /// The entry for a country code, or nil when TMDB lists nothing there.
+    func region(_ code: String) -> TMDBRegionProviders? {
+        results[code.uppercased()]
+    }
+}

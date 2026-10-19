@@ -56,6 +56,11 @@ struct WatchlistEntry: Codable, Identifiable, Hashable {
     let mediaType: MediaType
     var addedAt: Date
     var isTrackingEnabled: Bool
+    /// Opt-in alert mute. The title stays tracked (isTrackingEnabled keeps feeding the
+    /// To Watch page); muting only stops its alerts being scheduled.
+    var alertsMuted: Bool? = nil
+    /// Display-only ordering: pinned rows sort to the top of their list.
+    var pinnedAt: Date? = nil
 }
 
 struct NotificationPreferences: Codable {

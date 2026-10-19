@@ -7,11 +7,34 @@ struct SettingsView: View {
 
     private var prefs: NotificationPreferences { appState.library.preferences }
 
+    private var regionOptions: [(code: String, title: String)] {
+        RegionCatalog.options(including: ConfigStore.defaultRegion)
+    }
+
     var body: some View {
         Form {
             Section("TMDB API Key") {
                 APIKeyForm { Task { await appState.runFullRefresh() } }
                 TMDBKeyHelp()
+            }
+
+            Section("Region") {
+                Picker("Release region", selection: Binding(
+                    get: { ConfigStore.defaultRegion },
+                    set: { code in
+                        ConfigStore.setDefaultRegion(code)
+                        // Relabel stored releases and re-check for new ones right away.
+                        Task { await appState.runFullRefresh() }
+                    }
+                )) {
+                    ForEach(regionOptions, id: \.code) { option in
+                        Text(option.title).tag(option.code)
+                    }
+                }
+
+                Text("Release dates and streaming availability follow this country.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Notifications") {

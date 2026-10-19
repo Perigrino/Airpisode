@@ -72,7 +72,7 @@ final class ReleaseEngineTests: XCTestCase {
                 TMDBReleaseDate(certification: nil, releaseDate: "2026-11-27T00:00:00.000Z", type: 4),
             ])
         ])
-        _ = await ReleaseEngine(client: stub).refreshIfNeeded(library: &lib, now: now, force: true)
+        _ = await ReleaseEngine(client: stub, region: "US").refreshIfNeeded(library: &lib, now: now, force: true)
         XCTAssertEqual(lib.movieReleases["movie-200"]?.count, 1)
     }
 

@@ -35,7 +35,13 @@ enum ConfigStore {
 
     static var defaultRegion: String {
         let stored = (read().defaultRegion ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return stored.isEmpty ? "US" : stored
+        return stored.isEmpty ? autoRegion() : stored
+    }
+
+    /// The region used when the user has never picked one: the Mac's own locale region,
+    /// so a German Mac sees German release dates instead of silently hard-coded "US".
+    static func autoRegion(for locale: Locale = .current) -> String {
+        locale.region?.identifier ?? "US"
     }
 
     static func setDefaultRegion(_ value: String) {
@@ -81,5 +87,33 @@ enum ConfigStore {
         }
         UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
         return config
+    }
+}
+
+/// Country codes offered by the Settings region picker, labelled in the user's language and
+/// sorted by name. The picker always also includes the currently stored region even when it
+/// is not part of this list.
+enum RegionCatalog {
+    /// Regions TMDB serves release-date and watch-provider data for. Deliberately bounded —
+    /// a 420-point-wide Settings window needs a plain menu, not a world gazetteer.
+    static let codes: [String] = [
+        "US", "GB", "CA", "AU", "NZ", "IE", "FR", "DE", "ES", "IT", "NL", "BE", "CH", "AT",
+        "SE", "NO", "DK", "FI", "PL", "PT", "CZ", "HU", "RO", "GR", "TR", "UA",
+        "BR", "MX", "AR", "CL", "CO", "PE", "JP", "KR", "CN", "HK", "TW", "IN", "ID",
+        "TH", "MY", "SG", "PH", "VN", "ZA", "NG", "EG", "AE", "IL", "SA",
+    ]
+
+    static func label(for code: String, in locale: Locale = .current) -> String {
+        let name = locale.localizedString(forRegionCode: code) ?? ""
+        return name.isEmpty ? code : "\(name) (\(code))"
+    }
+
+    /// Picker entries sorted by display name, `current` always present even off-list.
+    static func options(including current: String, in locale: Locale = .current) -> [(code: String, title: String)] {
+        var all = Set(codes)
+        all.insert(current)
+        return all
+            .map { (code: $0, title: label(for: $0, in: locale)) }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 }
