@@ -11,7 +11,7 @@ on:
 jobs:
   test:
     name: Test (macOS)
-    runs-on: macos-14
+    runs-on: macos-15 # XcodeGen produces project format 77, which needs Xcode 16+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
