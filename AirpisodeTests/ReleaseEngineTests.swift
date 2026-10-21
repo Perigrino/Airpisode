@@ -4,10 +4,11 @@ import XCTest
 final class ReleaseEngineTests: XCTestCase {
     private let now = TMDBMapper.parseDate("2026-10-16")!  // noon UTC
 
-    private func tvDetail() -> TMDBTVDetail {
+    private func tvDetail(externalIDs: TMDBExternalIDs? = nil) -> TMDBTVDetail {
         TMDBTVDetail(id: 100, name: "Severance", overview: nil, posterPath: nil, firstAirDate: nil,
                      status: "Returning Series",
-                     seasons: [TMDBSeasonSummary(seasonNumber: 1, episodeCount: 1, airDate: "2026-09-01")])
+                     seasons: [TMDBSeasonSummary(seasonNumber: 1, episodeCount: 1, airDate: "2026-09-01")],
+                     externalIDs: externalIDs)
     }
 
     private func makeLibrary(lastRefreshed: Date?, oldAirDate: String?) -> Library {
@@ -144,5 +145,54 @@ final class ReleaseEngineTests: XCTestCase {
         ])
         _ = await ReleaseEngine(client: stub).refreshIfNeeded(library: &lib, now: now)
         XCTAssertEqual(stub.seasonCallNumbers, [2])
+    }
+
+    func testUpcomingEpisodeIsEnrichedWithTVmazeAirTime() async {
+        var lib = makeLibrary(lastRefreshed: now.addingTimeInterval(-7 * 3600), oldAirDate: "2026-10-20")
+        let stub = StubTMDBClient()
+        stub.tvDetailResult = tvDetail(externalIDs: TMDBExternalIDs(tvdbID: 42, imdbID: "tt42"))
+        stub.seasons[1] = TMDBSeason(seasonNumber: 1, episodes: [
+            TMDBTVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Ep", overview: nil, airDate: "2026-10-20", stillPath: nil)
+        ])
+        let provider = StubAirTimeProvider()
+        let exact = now.addingTimeInterval(4 * 86_400 + 8 * 3600)
+        provider.timestamps[EpisodeKey(season: 1, number: 1)] = exact
+
+        _ = await ReleaseEngine(client: stub, airTimes: provider).refreshIfNeeded(library: &lib, now: now)
+
+        XCTAssertEqual(lib.episodes["tv-100"]?.first?.airTimestamp, exact)
+        XCTAssertEqual(provider.requests.first?.tvdbID, 42)
+        XCTAssertEqual(provider.requests.first?.imdbID, "tt42")
+    }
+
+    func testAirTimeLookupFailureLeavesEpisodeDateOnly() async {
+        var lib = makeLibrary(lastRefreshed: now.addingTimeInterval(-7 * 3600), oldAirDate: "2026-10-20")
+        let stub = StubTMDBClient()
+        stub.tvDetailResult = tvDetail()
+        stub.seasons[1] = TMDBSeason(seasonNumber: 1, episodes: [
+            TMDBTVEpisode(episodeNumber: 1, seasonNumber: 1, name: "Ep", overview: nil, airDate: "2026-10-20", stillPath: nil)
+        ])
+        let provider = StubAirTimeProvider()  // no timestamps
+
+        _ = await ReleaseEngine(client: stub, airTimes: provider).refreshIfNeeded(library: &lib, now: now)
+
+        XCTAssertNil(lib.episodes["tv-100"]?.first?.airTimestamp)
+    }
+
+    func testChangedAirDateDropsStaleAirTime() async {
+        let oldDate = TMDBMapper.parseDate("2026-10-18")!
+        var previous = Episode(tmdbID: 100, seasonNumber: 1, episodeNumber: 1, name: "Ep",
+                               overview: nil, airDate: oldDate, stillPath: nil)
+        previous.airTimestamp = oldDate.addingTimeInterval(8 * 3600)
+        let newDate = TMDBMapper.parseDate("2026-10-26")!  // beyond the 7-day lookup window
+        let moved = Episode(tmdbID: 100, seasonNumber: 1, episodeNumber: 1, name: "Ep",
+                            overview: nil, airDate: newDate, stillPath: nil)
+
+        let enriched = await AirTimeEnricher.enrich(
+            [moved], previous: [previous], detail: tvDetail(),
+            provider: StubAirTimeProvider(), now: now
+        )
+
+        XCTAssertNil(enriched.first?.airTimestamp)
     }
 }

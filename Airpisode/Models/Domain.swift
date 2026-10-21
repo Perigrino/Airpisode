@@ -38,6 +38,9 @@ struct Episode: Codable, Identifiable, Hashable {
     var name: String
     var overview: String?
     var airDate: Date?
+    /// Exact broadcast instant from TVmaze when known. `airDate` stays the date-only
+    /// TMDB value, used for display and release diffing.
+    var airTimestamp: Date? = nil
     var stillPath: String?
 }
 

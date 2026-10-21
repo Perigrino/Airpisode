@@ -13,10 +13,10 @@ extension Library {
     func nextEpisode(forTitle titleID: String, now: Date = .now) -> Episode? {
         (episodes[titleID] ?? [])
             .filter { episode in
-                guard let airDate = episode.airDate, airDate >= now else { return false }
+                guard let airDate = airMoment(episode), airDate >= now else { return false }
                 return !watchedEpisodes.contains(episode.id)
             }
-            .min { ($0.airDate ?? .distantFuture) < ($1.airDate ?? .distantFuture) }
+            .min { (airMoment($0) ?? .distantFuture) < (airMoment($1) ?? .distantFuture) }
     }
 
     /// All tracked titles' next release, sorted soonest-first. Date-only items keep `isTimed == false`.
@@ -29,9 +29,9 @@ extension Library {
                 if let episode = nextEpisode(forTitle: entry.id, now: now) {
                     items.append(UpcomingItem(
                         title: title,
-                        date: episode.airDate,
+                        date: airMoment(episode),
                         label: "S\(episode.seasonNumber)E\(episode.episodeNumber) · \(episode.name)",
-                        isTimed: false  // TMDB episode air dates are date-only
+                        isTimed: episode.airTimestamp != nil
                     ))
                 } else if let airing = title.nextAiring, let date = airing.airDate, date >= now {
                     // No fetched upcoming episode (e.g. the next season hasn't started), but
@@ -59,5 +59,10 @@ extension Library {
             }
         }
         return items.sorted { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
+    }
+
+    /// An exact air instant when one is known, otherwise TMDB's date-only value.
+    private func airMoment(_ episode: Episode) -> Date? {
+        episode.airTimestamp ?? episode.airDate
     }
 }

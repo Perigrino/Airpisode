@@ -42,7 +42,7 @@ final class LibraryUpcomingTests: XCTestCase {
 
     func testUpcomingReleasesIncludesDateOnlyMovieAsUntimed() {
         var lib = makeLibrary()
-        // Timed TV episode (episodes are date-only in TMDB → isTimed false).
+        // TV episode with no provider time: date-only TMDB marker → isTimed false.
         lib.episodes["tv-100"] = [
             Episode(tmdbID: 100, seasonNumber: 2, episodeNumber: 1, name: "Premiere", overview: nil, airDate: future(1), stillPath: nil)
         ]
@@ -108,5 +108,18 @@ final class LibraryUpcomingTests: XCTestCase {
         ]
         let items = lib.upcomingReleases(now: now)
         XCTAssertEqual(items.first { $0.title.id == "tv-100" }?.label, "S2E9 · Soon")
+    }
+
+    func testNextEpisodeUsesExactAirTimeAfterDateOnlyMarkerPassed() {
+        var lib = makeLibrary()
+        var episode = Episode(tmdbID: 100, seasonNumber: 2, episodeNumber: 1, name: "Tonight",
+                              overview: nil, airDate: now.addingTimeInterval(-3600), stillPath: nil)
+        episode.airTimestamp = now.addingTimeInterval(12 * 3600)
+        lib.episodes["tv-100"] = [episode]
+
+        XCTAssertEqual(lib.nextEpisode(forTitle: "tv-100", now: now)?.id, episode.id)
+        let item = lib.upcomingReleases(now: now).first { $0.title.id == "tv-100" }
+        XCTAssertEqual(item?.isTimed, true)
+        XCTAssertEqual(item?.date, episode.airTimestamp)
     }
 }

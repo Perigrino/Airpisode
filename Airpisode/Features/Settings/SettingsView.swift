@@ -63,12 +63,12 @@ struct SettingsView: View {
                     Text("48 hours before").tag(48)
                 }
 
-                Toggle("Alert 15 minutes before (timed releases)", isOn: Binding(
+                Toggle("Alert 15 minutes before (known air times)", isOn: Binding(
                     get: { prefs.imminentAlertMinutes != nil },
                     set: { on in appState.updateNotificationPreferences { $0.imminentAlertMinutes = on ? 15 : nil } }
                 ))
 
-                Text("Date-only releases (most TV episodes) never get time-based alerts — Airpisode won't invent a release time.")
+                Text("Airpisode looks up episode air times from TVmaze. Releases with a confirmed time get timed alerts; date-only releases are shown without a clock time and get no time-based alert.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -80,6 +80,9 @@ struct SettingsView: View {
                         .scaledToFit()
                         .frame(height: 20)
                     Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Episode air times from TVmaze.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

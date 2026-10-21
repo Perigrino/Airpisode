@@ -62,10 +62,25 @@ final class NotificationSchedulerTests: XCTestCase {
         let scheduler = NotificationScheduler(client: mock)
         let prefs = NotificationPreferences(preAlertHours: 24, imminentAlertMinutes: 15, permissionRequested: true)
 
-        // TMDB date-only encoding: exactly noon UTC.
+        // TMDB date-only encoding: exactly noon UTC, no TVmaze time available.
         await scheduler.schedule(for: title(), episodes: [episode(airDate: now.addingTimeInterval(86_400))], prefs: prefs, now: now)
 
         XCTAssertTrue(mock.addCalls.isEmpty)
+    }
+
+    func testTVmazeTimestampOverridesDateOnlyAirDate() async {
+        let mock = MockNotificationClient()
+        let scheduler = NotificationScheduler(client: mock)
+        let prefs = NotificationPreferences(preAlertHours: 24, imminentAlertMinutes: 15, permissionRequested: true)
+        let exact = now.addingTimeInterval(30 * 3600 + 900)  // 30.25h away, not noon UTC
+
+        var ep = episode(airDate: now.addingTimeInterval(86_400))  // date-only TMDB value
+        ep.airTimestamp = exact
+        await scheduler.schedule(for: title(), episodes: [ep], prefs: prefs, now: now)
+
+        XCTAssertEqual(mock.addCalls.count, 2)
+        XCTAssertEqual(triggerDate(of: mock.addCalls[0]), exact.addingTimeInterval(-24 * 3600))
+        XCTAssertEqual(triggerDate(of: mock.addCalls[1]), exact.addingTimeInterval(-15 * 60))
     }
 
     func testTimedMovieReleaseGetsPreAlertOnly() async {

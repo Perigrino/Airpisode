@@ -39,11 +39,23 @@ struct TMDBTVDetail: Decodable {
     let status: String?
     let seasons: [TMDBSeasonSummary]
     var nextEpisodeToAir: TMDBTVEpisode? = nil
+    /// Present when the request appends `external_ids`; used to look up the show on TVmaze.
+    var externalIDs: TMDBExternalIDs? = nil
     enum CodingKeys: String, CodingKey {
         case id, name, overview, status, seasons
         case posterPath = "poster_path"
         case firstAirDate = "first_air_date"
         case nextEpisodeToAir = "next_episode_to_air"
+        case externalIDs = "external_ids"
+    }
+}
+
+struct TMDBExternalIDs: Decodable {
+    let tvdbID: Int?
+    let imdbID: String?
+    enum CodingKeys: String, CodingKey {
+        case tvdbID = "tvdb_id"
+        case imdbID = "imdb_id"
     }
 }
 struct TMDBSeasonSummary: Decodable {

@@ -27,16 +27,19 @@ final class AppState: ObservableObject {
 
     let tmdb: TMDBClientProtocol
     let notifications: NotificationScheduler
+    let airTimes: AirTimeProviding
     private let store: LibraryStore
 
     init(
         store: LibraryStore = LibraryStore(),
         tmdb: TMDBClientProtocol = TMDBClient(),
-        notifications: NotificationScheduler = NotificationScheduler(client: SystemNotificationClient())
+        notifications: NotificationScheduler = NotificationScheduler(client: SystemNotificationClient()),
+        airTimes: AirTimeProviding = TVmazeClient()
     ) {
         self.store = store
         self.tmdb = tmdb
         self.notifications = notifications
+        self.airTimes = airTimes
         // The UN delegate is a singleton slot: install this state so banner action taps
         // (Mark watched / Mute) reach the library mutations.
         AppDelegate.actionHandler = self
@@ -185,7 +188,7 @@ final class AppState: ObservableObject {
         isRefreshing = true
         let started = Date()
 
-        let engine = ReleaseEngine(client: tmdb)
+        let engine = ReleaseEngine(client: tmdb, airTimes: airTimes)
         var snapshot = library
         _ = await engine.refreshIfNeeded(library: &snapshot, now: .now, force: force)
         library = snapshot
@@ -224,6 +227,13 @@ final class AppState: ObservableObject {
                     let seasonData = try await tmdb.season(tvID: entry.tmdbID, season: season.seasonNumber)
                     episodes += TMDBMapper.episodes(seasonData, tvID: entry.tmdbID)
                 }
+                episodes = await AirTimeEnricher.enrich(
+                    episodes,
+                    previous: library.episodes[titleID] ?? [],
+                    detail: detail,
+                    provider: airTimes,
+                    now: Date()
+                )
                 title.lastRefreshed = Date()
                 library.titles[titleID] = title
                 library.episodes[titleID] = episodes

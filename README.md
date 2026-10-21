@@ -20,7 +20,7 @@ Airpisode is a macOS app that tracks when your TV shows and movies come out. It 
 - **Episode tracking**: lists seasons and episodes, and marks what has aired.
 - **Release dates**: shows theatrical, digital, physical, and TV windows by region.
 - **Search**: searches TMDB and suggests titles based on what you track.
-- **Notifications**: alerts you before an episode or release, with a lead time you choose.
+- **Notifications**: alerts you before an episode or release, with a lead time you choose. Episode air times come from TVmaze when available.
 - **Poster-tinted cards**: each row picks a subtle color from its poster.
 - **Offline library**: stores your watchlist as JSON, so it loads without a network.
 
@@ -81,15 +81,17 @@ DMG and publishes it as a GitHub release with its sha256 in the notes.
 
 ## How it works
 
-Airpisode has no backend. It reads from TMDB and keeps your library in Application Support. It never invents a release time: when TMDB lists a date without a time, the app shows the day only and skips time-based alerts.
+Airpisode has no backend. It reads dates from TMDB and exact TV air times from TVmaze, then keeps your library in Application Support. It never invents a release time: when no air time is known, the app shows the day only and skips time-based alerts.
 
 ## Data and privacy
 
-Your library lives at `~/Library/Application Support/Airpisode/library.json`, and your key is stored in your app preferences. Airpisode sends your key and search terms to TMDB only. There is no analytics and no telemetry.
+Your library lives at `~/Library/Application Support/Airpisode/library.json`, and your key is stored in your app preferences. Airpisode sends your key and search terms to TMDB, and show identifiers to TVmaze to look up episode air times. There is no analytics and no telemetry.
 
 ## Attribution
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+Episode air times are provided by [TVmaze](https://www.tvmaze.com).
 
 ## License
 

@@ -11,8 +11,12 @@ struct EpisodeRowView: View {
     /// When set, the row shows a selection checkbox instead of the watched toggle.
     var onToggleSelected: (() -> Void)? = nil
 
+    private var airMoment: Date? {
+        episode.airTimestamp ?? episode.airDate
+    }
+
     private var aired: Bool {
-        guard let date = episode.airDate else { return false }
+        guard let date = airMoment else { return false }
         return date <= .now
     }
 
@@ -70,10 +74,21 @@ struct EpisodeRowView: View {
     }
 
     private var dateText: String {
-        guard let date = episode.airDate else { return "TBD" }
+        guard let date = airMoment else { return "TBD" }
+        // Show the clock time only when it is actually known; a date-only release
+        // intentionally renders as a plain day.
+        if !aired, episode.airTimestamp != nil {
+            return Self.upcomingFormatter.string(from: date)
+        }
         let formatter = aired ? Self.fullDayFormatter : Self.dayFormatter
         return formatter.string(from: date)
     }
+
+    static let upcomingFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d · HH:mm"
+        return f
+    }()
 
     static let dayFormatter: DateFormatter = {
         let f = DateFormatter()

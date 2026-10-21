@@ -36,8 +36,17 @@ struct NotificationScheduler {
         guard prefs.permissionRequested else { return }
 
         for episode in episodes {
-            // v1: date-only episode air dates (noon-UTC encoding) get no alerts — never invent a time.
-            guard let airDate = episode.airDate, airDate > now, !Self.isDateOnlyEncoded(airDate) else { continue }
+            // Prefer TVmaze's exact air instant. TMDB alone is date-only for TV, and a
+            // date-only value must never be turned into an invented clock time.
+            let airDate: Date
+            if let timestamp = episode.airTimestamp {
+                airDate = timestamp
+            } else if let date = episode.airDate, !Self.isDateOnlyEncoded(date) {
+                airDate = date
+            } else {
+                continue
+            }
+            guard airDate > now else { continue }
             let key = episode.id
             if let hours = prefs.preAlertHours {
                 let fire = airDate.addingTimeInterval(-TimeInterval(hours * 3600))

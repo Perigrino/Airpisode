@@ -69,7 +69,8 @@ struct TMDBClient: TMDBClientProtocol {
         return page.results
     }
     func tvDetail(id: Int) async throws -> TMDBTVDetail {
-        try await get("tv/\(id)")
+        // `external_ids` carries the TVDB/IMDb IDs TVmaze lookups are keyed by.
+        try await get("tv/\(id)", query: [URLQueryItem(name: "append_to_response", value: "external_ids")])
     }
     func season(tvID: Int, season: Int) async throws -> TMDBSeason {
         try await get("tv/\(tvID)/season/\(season)")

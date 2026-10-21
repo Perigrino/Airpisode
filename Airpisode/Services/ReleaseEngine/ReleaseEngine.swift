@@ -13,6 +13,8 @@ struct ReleaseEngine {
     /// Region release dates are fetched for. Defaults to the user's stored setting at
     /// construction; tests pass an explicit region so they never depend on machine config.
     var region: String = ConfigStore.defaultRegion
+    /// Optional exact-air-time lookup (TVmaze). A failure simply leaves episodes date-only.
+    var airTimes: AirTimeProviding? = nil
 
     func refreshIfNeeded(library: inout Library, now: Date, force: Bool = false) async -> [ReleaseChange] {
         var changes: [ReleaseChange] = []
@@ -31,6 +33,13 @@ struct ReleaseEngine {
                         let seasonData = try await client.season(tvID: entry.tmdbID, season: season.seasonNumber)
                         episodes += TMDBMapper.episodes(seasonData, tvID: entry.tmdbID)
                     }
+                    episodes = await AirTimeEnricher.enrich(
+                        episodes,
+                        previous: library.episodes[titleID] ?? [],
+                        detail: detail,
+                        provider: airTimes,
+                        now: now
+                    )
                     changes += Self.diff(
                         old: library.episodes[titleID] ?? [], new: episodes,
                         titleID: titleID, lastRefreshed: previousRefreshed, now: now,
