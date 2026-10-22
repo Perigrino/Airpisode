@@ -4,6 +4,7 @@ import UserNotifications
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @State private var permissionDenied = false
+    @State private var showDiagnostics = false
 
     private var prefs: NotificationPreferences { appState.library.preferences }
 
@@ -68,7 +69,23 @@ struct SettingsView: View {
                     set: { on in appState.updateNotificationPreferences { $0.imminentAlertMinutes = on ? 15 : nil } }
                 ))
 
-                Text("Airpisode looks up episode air times from TVmaze. Releases with a confirmed time get timed alerts; date-only releases are shown without a clock time and get no time-based alert.")
+                Toggle("Daily 9 AM lineup summary", isOn: Binding(
+                    get: { prefs.digestEnabled },
+                    set: { on in appState.updateNotificationPreferences { $0.digestEnabled = on } }
+                ))
+
+                Toggle("Notify me when a release date changes", isOn: Binding(
+                    get: { prefs.notifyScheduleChanges },
+                    set: { on in appState.updateNotificationPreferences { $0.notifyScheduleChanges = on } }
+                ))
+
+                HStack {
+                    Button("Notification Diagnostics…") { showDiagnostics = true }
+                    Spacer()
+                    Button("Send Test Alert") { Task { await appState.sendTestAlert() } }
+                }
+
+                Text("Airpisode looks up episode air times from TVmaze. Releases with a confirmed time get timed alerts; date-only releases are shown without a clock time and get no time-based alert. Use a show's context menu to override the global lead time.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -90,6 +107,10 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 420)
+        .sheet(isPresented: $showDiagnostics) {
+            NotificationDiagnosticsView()
+                .environmentObject(appState)
+        }
         .task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             permissionDenied = prefs.permissionRequested && settings.authorizationStatus == .denied

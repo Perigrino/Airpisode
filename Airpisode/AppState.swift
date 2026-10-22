@@ -47,10 +47,10 @@ final class AppState: ObservableObject {
 
     func loadLibrary() async {
         library = await store.load()
-        if library.migrateLegacyWatchedState() { save() }
-        for entry in library.entries {
-            reschedule(titleID: entry.id)
-        }
+        let migratedSchema = library.migrateSchemaIfNeeded()
+        let migratedWatched = library.migrateLegacyWatchedState()
+        if migratedSchema || migratedWatched { save() }
+        rescheduleAll()
     }
 
     // MARK: - Library mutations
@@ -75,6 +75,7 @@ final class AppState: ObservableObject {
         library.watchedShows.remove(titleID)
         library.watchedMovies.remove(titleID)
         library.watchedEpisodes.subtract(episodes.map(\.id))
+        library.scheduleChanges.removeAll { $0.titleID == titleID }
         save()
     }
 
@@ -97,9 +98,10 @@ final class AppState: ObservableObject {
             notifications.cancelAll(forTitle: titleID, keys: ids)
         } else {
             library.watchedEpisodes.subtract(ids)
-            // Un-watching can bring an episode back into the alert schedule.
-            reschedule(titleID: titleID)
         }
+        // Reconciliation also handles the unwatched case: a returning episode can rejoin
+        // the plan, while watched IDs disappear from it.
+        rescheduleAll()
         save()
     }
 
@@ -110,6 +112,7 @@ final class AppState: ObservableObject {
         } else {
             library.watchedMovies.remove(titleID)
         }
+        rescheduleAll()
         save()
     }
 
@@ -122,8 +125,29 @@ final class AppState: ObservableObject {
             let episodes = library.episodes[titleID] ?? []
             let keys = episodes.map(\.id) + (library.movieReleases[titleID] ?? []).map(\.id)
             notifications.cancelAll(forTitle: titleID, keys: keys)
-        } else {
-            reschedule(titleID: titleID)
+        }
+        rescheduleAll()
+        save()
+    }
+
+    /// Changes one show's pre-release lead time without touching the global setting.
+    func setPreAlertOverride(_ override: AlertOverride, titleID: String) {
+        guard let index = library.entries.firstIndex(where: { $0.id == titleID }) else { return }
+        library.entries[index].preAlertOverride = override
+        rescheduleAll()
+        save()
+    }
+
+    // MARK: - Schedule changes
+
+    var unreadScheduleChanges: [ScheduleChangeRecord] {
+        library.scheduleChanges.filter { !$0.isRead }
+    }
+
+    func markScheduleChangesRead() {
+        guard library.scheduleChanges.contains(where: { !$0.isRead }) else { return }
+        for index in library.scheduleChanges.indices {
+            library.scheduleChanges[index].isRead = true
         }
         save()
     }
@@ -190,8 +214,14 @@ final class AppState: ObservableObject {
 
         let engine = ReleaseEngine(client: tmdb, airTimes: airTimes)
         var snapshot = library
-        _ = await engine.refreshIfNeeded(library: &snapshot, now: .now, force: force)
+        // A title with a prior successful refresh is the only one whose diff is meaningful.
+        // The first load of a newly added show sees its whole season as "new".
+        let previouslyRefreshed = Set(snapshot.entries.compactMap { entry in
+            snapshot.titles[entry.id]?.lastRefreshed == nil ? nil : entry.id
+        })
+        let changes = await engine.refreshIfNeeded(library: &snapshot, now: .now, force: force)
         library = snapshot
+        recordScheduleChanges(changes, previouslyRefreshed: previouslyRefreshed)
         try? await store.save(library)
         // A title still carrying a pre-sweep `lastRefreshed` was not re-fetched (offline pass).
         // Titles without loaded data are ignored so a data-less entry can never block forever.
@@ -202,9 +232,7 @@ final class AppState: ObservableObject {
         lastRefreshError = failed > 0
             ? "Couldn't refresh \(failed) title\(failed == 1 ? "" : "s"). Will retry automatically."
             : nil
-        for entry in snapshot.entries {
-            reschedule(titleID: entry.id)
-        }
+        rescheduleAll()
 
         // Keep the spinner visible long enough to read even when nothing was stale.
         let elapsed = Date().timeIntervalSince(started)
@@ -217,7 +245,12 @@ final class AppState: ObservableObject {
 
     func refreshTitle(_ titleID: String) async {
         guard let entry = library.entries.first(where: { $0.id == titleID }) else { return }
+        let now = Date()
+        let hadRefreshed = library.titles[titleID]?.lastRefreshed != nil
+        let oldEpisodes = library.episodes[titleID] ?? []
+        let oldReleases = library.movieReleases[titleID] ?? []
         do {
+            var changes: [ReleaseChange] = []
             switch entry.mediaType {
             case .tv:
                 let detail = try await tmdb.tvDetail(id: entry.tmdbID)
@@ -229,12 +262,17 @@ final class AppState: ObservableObject {
                 }
                 episodes = await AirTimeEnricher.enrich(
                     episodes,
-                    previous: library.episodes[titleID] ?? [],
+                    previous: oldEpisodes,
                     detail: detail,
                     provider: airTimes,
-                    now: Date()
+                    now: now
                 )
-                title.lastRefreshed = Date()
+                changes = ReleaseEngine.diff(
+                    old: oldEpisodes, new: episodes, titleID: titleID,
+                    lastRefreshed: library.titles[titleID]?.lastRefreshed, now: now,
+                    id: { $0.id }, date: { $0.airDate }, hasTime: { _ in false }
+                )
+                title.lastRefreshed = now
                 library.titles[titleID] = title
                 library.episodes[titleID] = episodes
             case .movie:
@@ -242,15 +280,58 @@ final class AppState: ObservableObject {
                 var title = TMDBMapper.title(from: detail)
                 let releases = try await tmdb.movieReleaseDates(id: entry.tmdbID)
                 let region = ConfigStore.defaultRegion
-                title.lastRefreshed = Date()
+                let mapped = TMDBMapper.movieReleases(releases, movieID: entry.tmdbID, region: region)
+                changes = ReleaseEngine.diff(
+                    old: oldReleases, new: mapped, titleID: titleID,
+                    lastRefreshed: library.titles[titleID]?.lastRefreshed, now: now,
+                    id: { $0.id }, date: { $0.date }, hasTime: { $0.hasTime }
+                )
+                title.lastRefreshed = now
                 library.titles[titleID] = title
-                library.movieReleases[titleID] = TMDBMapper.movieReleases(releases, movieID: entry.tmdbID, region: region)
+                library.movieReleases[titleID] = mapped
             }
+            recordScheduleChanges(
+                changes,
+                previouslyRefreshed: hadRefreshed ? [titleID] : []
+            )
             lastRefreshError = nil
             try? await store.save(library)
-            reschedule(titleID: titleID)
+            rescheduleAll()
         } catch {
             lastRefreshError = "Couldn't refresh \(library.titles[titleID]?.name ?? titleID): \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Launch refresh
+
+    private var didRefreshOnLaunch = false
+
+    /// One forced pass when the window first appears, so launching the app actually updates
+    /// data instead of waiting for the hourly heartbeat. Skips a relaunch within ten minutes
+    /// so quitting and reopening does not hammer TMDB. Returns without doing anything when
+    /// the caller already knows there is no API key.
+    func refreshOnLaunch(now: Date = .now, in calendar: Calendar = .current) async {
+        guard !didRefreshOnLaunch else { return }
+        didRefreshOnLaunch = true
+
+        // Only skip when every tracked title was refreshed moments ago. One fresh title must
+        // not hide stale siblings after a long time away.
+        let allFresh = library.entries.allSatisfy { entry in
+            guard let refreshed = library.titles[entry.id]?.lastRefreshed else { return false }
+            return now.timeIntervalSince(refreshed) < 600
+        }
+        if allFresh && !library.entries.isEmpty {
+            // Recent enough. Stamp the morning slot so the hourly ticker does not immediately
+            // repeat a sweep that just happened moments before launch.
+            if let slot = dailySweepSlot(for: now, in: calendar), now >= slot {
+                lastDailySweepSlot = slot
+            }
+            return
+        }
+
+        let failed = await runFullRefresh(force: true, animated: false)
+        if failed == 0, let slot = dailySweepSlot(for: now, in: calendar), now >= slot {
+            lastDailySweepSlot = slot
         }
     }
 
@@ -327,19 +408,48 @@ final class AppState: ObservableObject {
     func updateNotificationPreferences(_ mutate: (inout NotificationPreferences) -> Void) {
         mutate(&library.preferences)
         save()
-        for entry in library.entries {
-            reschedule(titleID: entry.id)
-        }
+        rescheduleAll()
     }
 
-    private func reschedule(titleID: String) {
-        guard let title = library.titles[titleID], !library.isMuted(titleID) else { return }
-        let episodes = library.episodes[titleID] ?? []
-        let releases = library.movieReleases[titleID] ?? []
-        let keys = episodes.map(\.id) + releases.map(\.id)
-        notifications.cancelAll(forTitle: titleID, keys: keys)
-        Task {
-            await notifications.schedule(for: title, episodes: episodes, movieReleases: releases, prefs: library.preferences)
+    /// Reconciles every alert in one pass. Using the whole library is what lets the planner
+    /// see the 64-request budget and keep the soonest alerts instead of whichever title was
+    /// scheduled last.
+    private func rescheduleAll() {
+        let snapshot = library
+        Task { await notifications.apply(library: snapshot) }
+    }
+
+    func notificationDiagnostics(now: Date = .now) async -> NotificationDiagnosticsReport {
+        let authorization = await notifications.client.authorizationStatus()
+        let pending = await notifications.client.pendingAlerts()
+        return NotificationDiagnostics.report(
+            library: library,
+            authorization: authorization,
+            pending: pending,
+            now: now
+        )
+    }
+
+    func sendTestAlert() async {
+        let poster = library.entries.compactMap { library.titles[$0.id]?.posterPath }.first
+        await notifications.sendTestAlert(posterPath: poster)
+    }
+
+    private func recordScheduleChanges(
+        _ changes: [ReleaseChange],
+        previouslyRefreshed: Set<String>,
+        now: Date = .now
+    ) {
+        let records = ScheduleChangeRecorder.records(
+            from: changes,
+            library: library,
+            previouslyRefreshed: previouslyRefreshed,
+            now: now
+        )
+        guard !records.isEmpty else { return }
+        library.scheduleChanges = ScheduleChangeRecorder.merge(records, into: library.scheduleChanges)
+        if library.preferences.notifyScheduleChanges {
+            Task { await notifications.notifyScheduleChanges(records, now: now) }
         }
     }
 

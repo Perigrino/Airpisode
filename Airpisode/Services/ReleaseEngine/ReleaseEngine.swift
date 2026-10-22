@@ -96,7 +96,7 @@ struct ReleaseEngine {
 
     // MARK: - Diffing
 
-    private static func diff<Item>(
+    static func diff<Item>(
         old: [Item], new: [Item], titleID: String, lastRefreshed: Date?, now: Date,
         id: (Item) -> String, date: (Item) -> Date?, hasTime: (Item) -> Bool
     ) -> [ReleaseChange] {

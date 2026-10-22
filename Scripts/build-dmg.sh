@@ -4,7 +4,7 @@
 set -euo pipefail
 
 APP_NAME="Airpisode"
-VERSION="0.2.3"
+VERSION="0.2.4"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
 DIST="$ROOT/dist"

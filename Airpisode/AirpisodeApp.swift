@@ -295,6 +295,10 @@ struct RootView: View {
             await appState.loadLibrary()
             // Keeps alerts fresh even after the window is closed (hourly passes).
             appState.startBackgroundRefresh()
+            // Launch is the one time a full pass is expected without pressing Refresh.
+            if Secrets.hasKey {
+                await appState.refreshOnLaunch()
+            }
         }
         .sheet(isPresented: $needsKey) {
             WelcomeView(

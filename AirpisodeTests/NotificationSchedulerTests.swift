@@ -6,10 +6,14 @@ final class MockNotificationClient: NotificationClientProtocol, @unchecked Senda
     var addCalls: [UNNotificationRequest] = []
     var removeCalls: [[String]] = []
     var authResult = true
+    var authStatus: UNAuthorizationStatus = .authorized
+    var pending: [PendingAlert] = []
 
     func requestAuthorization() async throws -> Bool { authResult }
     func add(_ request: UNNotificationRequest) async throws { addCalls.append(request) }
     func removePending(withIdentifiers ids: [String]) { removeCalls.append(ids) }
+    func authorizationStatus() async -> UNAuthorizationStatus { authStatus }
+    func pendingAlerts() async -> [PendingAlert] { pending }
 }
 
 final class NotificationSchedulerTests: XCTestCase {
@@ -117,5 +121,28 @@ final class NotificationSchedulerTests: XCTestCase {
         await scheduler.schedule(for: title(), episodes: [episode(airDate: now.addingTimeInterval(-86_400))], prefs: prefs, now: now)
 
         XCTAssertTrue(mock.addCalls.isEmpty)
+    }
+
+    func testApplyRemovesStaleManagedAlertsButKeepsTestAlerts() async {
+        let mock = MockNotificationClient()
+        mock.pending = [
+            PendingAlert(id: "pre-tv-100-old", title: "Old", body: "", fireDate: now),
+            PendingAlert(id: "test-123", title: "Test", body: "", fireDate: now),
+        ]
+        let scheduler = NotificationScheduler(client: mock)
+
+        await scheduler.apply(plan: [])
+
+        XCTAssertEqual(mock.removeCalls, [["pre-tv-100-old"]])
+    }
+
+    func testTestAlertUsesATenSecondTrigger() async {
+        let mock = MockNotificationClient()
+        await NotificationScheduler(client: mock).sendTestAlert(now: now)
+
+        XCTAssertEqual(mock.addCalls.count, 1)
+        let trigger = mock.addCalls[0].trigger as? UNTimeIntervalNotificationTrigger
+        XCTAssertEqual(trigger?.timeInterval, 10)
+        XCTAssertTrue(mock.addCalls[0].identifier.hasPrefix(NotificationScheduler.testIDPrefix))
     }
 }

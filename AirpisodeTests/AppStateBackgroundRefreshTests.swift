@@ -60,6 +60,51 @@ final class AppStateBackgroundRefreshTests: XCTestCase {
         XCTAssertEqual(app.lastDailySweepSlot, gmtDate(2026, 10, 17, 6))
     }
 
+    func testRefreshOnLaunchFetchesOnceAndStampsTheMorningSlot() async {
+        let stub = StubTMDBClient()
+        stub.tvDetailResult = TMDBTVDetail(
+            id: 100, name: "Severance", overview: nil, posterPath: nil, firstAirDate: nil,
+            status: "Returning Series",
+            seasons: [TMDBSeasonSummary(seasonNumber: 1, episodeCount: 1, airDate: nil)]
+        )
+        stub.seasons[1] = TMDBSeason(seasonNumber: 1, episodes: [])
+        let app = AppState(
+            store: LibraryStore(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)),
+            tmdb: stub
+        )
+        app.addToLibrary(Title(
+            tmdbID: 100, mediaType: .tv, name: "Severance", overview: "", posterPath: nil,
+            firstAirDate: nil, tvStatus: nil, seasons: [], lastRefreshed: nil
+        ))
+
+        await app.refreshOnLaunch(now: gmtDate(2026, 10, 17, 7), in: gmt)
+        XCTAssertEqual(stub.tvDetailCallCount, 1)
+        XCTAssertEqual(app.lastDailySweepSlot, gmtDate(2026, 10, 17, 6))
+
+        // The window can be re-created; launch refresh must not run twice per process.
+        await app.refreshOnLaunch(now: gmtDate(2026, 10, 17, 7, 5), in: gmt)
+        XCTAssertEqual(stub.tvDetailCallCount, 1)
+    }
+
+    func testRefreshOnLaunchSkipsRecentDataButStillStampsTheSlot() async {
+        let stub = StubTMDBClient()
+        let app = AppState(
+            store: LibraryStore(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)),
+            tmdb: stub
+        )
+        app.addToLibrary(Title(
+            tmdbID: 100, mediaType: .tv, name: "Severance", overview: "", posterPath: nil,
+            firstAirDate: nil, tvStatus: nil, seasons: [], lastRefreshed: nil
+        ))
+        app.library.titles["tv-100"]?.lastRefreshed = gmtDate(2026, 10, 17, 6, 55)
+
+        await app.refreshOnLaunch(now: gmtDate(2026, 10, 17, 7), in: gmt)
+        XCTAssertEqual(stub.tvDetailCallCount, 0)
+        XCTAssertEqual(app.lastDailySweepSlot, gmtDate(2026, 10, 17, 6))
+    }
+
     func testOfflineMorningSweepDefersUntilReachable() async throws {
         let stub = StubTMDBClient() // every call throws while "offline"
         let app = AppState(store: LibraryStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)), tmdb: stub)

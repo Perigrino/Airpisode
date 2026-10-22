@@ -46,6 +46,10 @@ struct DashboardView: View {
                     }
                 }
 
+                if !appState.unreadScheduleChanges.isEmpty {
+                    ScheduleChangesCard(records: appState.unreadScheduleChanges)
+                }
+
                 if items.isEmpty
                     && appState.library.releasedUnwatchedEpisodes().isEmpty
                     && appState.library.releasedUnwatchedMovies().isEmpty {

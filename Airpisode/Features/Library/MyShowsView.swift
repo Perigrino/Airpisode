@@ -76,6 +76,19 @@ struct MyShowsView: View {
                     Label(appState.library.isMuted(title.id) ? "Unmute alerts" : "Mute alerts",
                           systemImage: appState.library.isMuted(title.id) ? "bell.fill" : "bell.slash")
                 }
+                Menu("Pre-release alert") {
+                    ForEach(AlertOverride.allCases) { option in
+                        Button {
+                            appState.setPreAlertOverride(option, titleID: title.id)
+                        } label: {
+                            if preAlertOverride(for: title.id) == option {
+                                Label(option.label, systemImage: "checkmark")
+                            } else {
+                                Text(option.label)
+                            }
+                        }
+                    }
+                }
                 Divider()
                 Button(role: .destructive) {
                     appState.removeFromLibrary(title.id)
@@ -95,6 +108,10 @@ struct MyShowsView: View {
         .background(PosterTintedCard(posterPath: title.posterPath))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .hoverLift()
+    }
+
+    private func preAlertOverride(for titleID: String) -> AlertOverride {
+        appState.library.entries.first(where: { $0.id == titleID })?.preAlertOverride ?? .inherit
     }
 
     private func subtitle(trackedCount: Int) -> String {
