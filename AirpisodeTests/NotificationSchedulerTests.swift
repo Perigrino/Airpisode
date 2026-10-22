@@ -181,4 +181,58 @@ final class NotificationSchedulerTests: XCTestCase {
 
         XCTAssertTrue(mock.addCalls.isEmpty)
     }
+
+    private func record(
+        titleName: String, label: String, kind: ScheduleChangeRecord.Kind,
+        newDate: Date?, posterPath: String? = nil
+    ) -> ScheduleChangeRecord {
+        ScheduleChangeRecord(
+            id: "\(titleName)|\(label)|\(kind.rawValue)", titleID: "tv-100", key: "key",
+            titleName: titleName, label: label, kind: kind, oldDate: nil,
+            newDate: newDate, detectedAt: now, posterPath: posterPath
+        )
+    }
+
+    func testSingleScheduleChangeSpeaksOncePerFact() async {
+        let mock = MockNotificationClient()
+        let moved = record(
+            titleName: "Severance", label: "S2E5", kind: .dateChanged,
+            newDate: now.addingTimeInterval(86_400)
+        )
+
+        await NotificationScheduler(client: mock).notifyScheduleChanges([moved], now: now)
+
+        XCTAssertEqual(mock.addCalls.count, 1)
+        XCTAssertEqual(mock.addCalls[0].content.title, "Schedule change")
+        XCTAssertEqual(mock.addCalls[0].content.subtitle, "Severance · S2E5")
+        XCTAssertTrue(mock.addCalls[0].content.body.hasPrefix("Moved to"))
+    }
+
+    func testSingleNewReleaseNamesTheKindNotTheDate() async {
+        let mock = MockNotificationClient()
+        let added = record(
+            titleName: "Severance", label: "S2E5", kind: .newRelease,
+            newDate: now.addingTimeInterval(86_400)
+        )
+
+        await NotificationScheduler(client: mock).notifyScheduleChanges([added], now: now)
+
+        XCTAssertEqual(mock.addCalls[0].content.title, "New release")
+        XCTAssertEqual(mock.addCalls[0].content.subtitle, "Severance · S2E5")
+        XCTAssertTrue(mock.addCalls[0].content.body.hasPrefix("Available"))
+    }
+
+    func testBatchedScheduleChangesListEachTitleOnce() async {
+        let mock = MockNotificationClient()
+        let records = [
+            record(titleName: "Dune", label: "Digital", kind: .newRelease, newDate: now.addingTimeInterval(86_400)),
+            record(titleName: "Severance", label: "S2E5", kind: .dateChanged, newDate: nil),
+        ]
+
+        await NotificationScheduler(client: mock).notifyScheduleChanges(records, now: now)
+
+        XCTAssertEqual(mock.addCalls[0].content.title, "2 release changes")
+        XCTAssertTrue(mock.addCalls[0].content.body.contains("Dune · Digital"))
+        XCTAssertTrue(mock.addCalls[0].content.body.contains("Severance · S2E5"))
+    }
 }

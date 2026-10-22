@@ -120,6 +120,44 @@ final class NotificationPlannerTests: XCTestCase {
         XCTAssertTrue(plan.isEmpty)
     }
 
+    func testDigestListsHonestTimesAndCarriesTheSoonestPoster() {
+        var lib = library()
+        lib.preferences.preAlertHours = nil
+        lib.preferences.digestEnabled = true
+        lib.preferences.digestHour = 9
+        lib.titles["tv-100"] = Title(
+            tmdbID: 100, mediaType: .tv, name: "Severance", overview: "", posterPath: "/severance.jpg",
+            firstAirDate: nil, tvStatus: nil, seasons: [], lastRefreshed: nil
+        )
+        // Tomorrow 22:00 GMT: an exact air moment inside tomorrow's 9 AM digest window.
+        lib.episodes["tv-100"] = [
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 5, name: "Woe's Hollow",
+                overview: nil, airDate: nil,
+                airTimestamp: now.addingTimeInterval(32 * 3600), stillPath: nil
+            )
+        ]
+        lib.entries.append(WatchlistEntry(tmdbID: 200, mediaType: .movie, addedAt: now, isTrackingEnabled: true))
+        lib.titles["movie-200"] = Title(
+            tmdbID: 200, mediaType: .movie, name: "Dune", overview: "", posterPath: "/dune.jpg",
+            firstAirDate: nil, tvStatus: nil, seasons: [], lastRefreshed: nil
+        )
+        // Date-only TMDB value: the digest must list it without inventing a time.
+        lib.movieReleases["movie-200"] = [
+            MovieRelease(tmdbID: 200, kind: .digital, region: "US", date: now.addingTimeInterval(36 * 3600), hasTime: false)
+        ]
+
+        let plan = NotificationPlanner.plan(library: lib, now: now, calendar: calendar)
+        let digest = plan.first { $0.id.hasPrefix(NotificationPlanner.digestPrefix) }
+
+        XCTAssertNotNil(digest)
+        // The soonest show fronts the banner; art is carried again like the other alerts.
+        XCTAssertEqual(digest?.posterPath, "/severance.jpg")
+        XCTAssertTrue(digest?.body.contains("Severance · S2E5 · 20:00") ?? false)
+        XCTAssertTrue(digest?.body.contains("Dune · Digital") ?? false)
+        XCTAssertFalse(digest?.body.contains("12:00") ?? true)
+    }
+
     func testCapKeepsTheSoonestSixtyAlerts() {
         var lib = library()
         lib.preferences.preAlertHours = 1

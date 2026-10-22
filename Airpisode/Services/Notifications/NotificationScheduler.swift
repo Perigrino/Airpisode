@@ -159,15 +159,30 @@ struct NotificationScheduler {
     func notifyScheduleChanges(_ records: [ScheduleChangeRecord], now: Date = .now) async {
         guard let first = records.first else { return }
         let content = UNMutableNotificationContent()
-        content.title = records.count == 1 ? "Release date changed" : "\(records.count) release changes"
-        content.body = records.prefix(2).map { record in
-            if let newDate = record.newDate {
-                return "\(record.titleName) \(record.label) → \(Self.dateText(newDate))"
+        if records.count == 1 {
+            // Title, show and episode each speak once; the body only carries the move.
+            content.title = first.kind == .newRelease ? "New release" : "Schedule change"
+            content.subtitle = NotificationPlanner.sanitized(
+                "\(first.titleName) · \(first.label)", limit: 80
+            )
+            if let newDate = first.newDate {
+                content.body = first.kind == .newRelease
+                    ? "Available \(Self.dateText(newDate))"
+                    : "Moved to \(Self.dateText(newDate))"
+            } else {
+                content.body = "\(first.titleName) \(first.label)"
             }
-            return "\(record.titleName) \(record.label)"
-        }.joined(separator: "\n")
-        content.body = NotificationPlanner.sanitized(content.body, limit: 300)
-        if records.count == 1, let posterPath = first.posterPath {
+        } else {
+            content.title = "\(records.count) release changes"
+            content.body = NotificationPlanner.sanitized(records.prefix(2).map { record -> String in
+                if let newDate = record.newDate {
+                    return "\(record.titleName) · \(record.label) → \(Self.dateText(newDate))"
+                }
+                return "\(record.titleName) · \(record.label)"
+            }.joined(separator: "\n"), limit: 300)
+        }
+        // The first passing poster fronts the banner; a missing one is cosmetic.
+        if let posterPath = records.compactMap(\.posterPath).first {
             await attachPoster(path: posterPath, to: content)
         }
         let request = UNNotificationRequest(

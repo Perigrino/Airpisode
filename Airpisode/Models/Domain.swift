@@ -112,7 +112,7 @@ struct ScheduleChangeRecord: Codable, Identifiable, Equatable {
     let newDate: Date?
     let detectedAt: Date
     var isRead: Bool = false
-    /// Optional poster so a one-change banner can carry the show art. Old records decode nil.
+    /// Optional poster so a change banner can carry the show art. Old records decode nil.
     var posterPath: String? = nil
 }
 

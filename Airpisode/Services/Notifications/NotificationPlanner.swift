@@ -56,8 +56,8 @@ enum NotificationPlanner {
                         appendPreAlert(
                             to: &alerts, id: "pre-\(title.id)-\(key)",
                             hours: hours, airDate: airDate, now: now,
-                            title: "\(title.name) · \(episodeLabel)",
-                            subtitle: cleanName,
+                            title: title.name,
+                            subtitle: "\(episodeLabel) · \(cleanName)",
                             body: "Airs \(relativeDay(airDate, now: now, calendar: calendar).lowercased()) at \(time(airDate, calendar: calendar))",
                             category: NotificationScheduler.episodeCategory,
                             posterPath: title.posterPath,
@@ -71,9 +71,9 @@ enum NotificationPlanner {
                             appendPreAlert(
                                 to: &alerts, id: "imminent-\(title.id)-\(key)",
                                 minutes: minutes, airDate: airDate, now: now,
-                                title: "\(title.name) · \(episodeLabel)",
-                                subtitle: cleanName,
-                                body: "Starts in \(minutes) minutes · \(time(airDate, calendar: calendar))",
+                                title: title.name,
+                                subtitle: "\(episodeLabel) · \(cleanName)",
+                                body: "Starts in \(minutes) minutes",
                                 category: NotificationScheduler.episodeCategory,
                                 posterPath: title.posterPath,
                                 userInfo: ["titleID": title.id, "key": key, "kind": "episode"]
@@ -83,13 +83,13 @@ enum NotificationPlanner {
                             // reminder. Fire shortly after the app is ready instead.
                             let minutesLeft = max(1, Int(ceil(remaining / 60)))
                             let body = remaining < 60
-                                ? "Starting now · \(time(airDate, calendar: calendar))"
-                                : "Starts in \(minutesLeft) minutes · \(time(airDate, calendar: calendar))"
+                                ? "Starting now"
+                                : "Starts in \(minutesLeft) minutes"
                             alerts.append(PlannedAlert(
                                 id: "imminent-\(title.id)-\(key)",
                                 fireDate: now.addingTimeInterval(5),
-                                title: "\(title.name) · \(episodeLabel)",
-                                subtitle: cleanName,
+                                title: title.name,
+                                subtitle: "\(episodeLabel) · \(cleanName)",
                                 body: body,
                                 category: NotificationScheduler.episodeCategory,
                                 posterPath: title.posterPath,
@@ -106,8 +106,8 @@ enum NotificationPlanner {
                     appendPreAlert(
                         to: &alerts, id: "pre-\(title.id)-\(release.id)",
                         hours: hours, airDate: date, now: now,
-                        title: "\(title.name) · \(release.kind.label)",
-                        subtitle: nil,
+                        title: title.name,
+                        subtitle: release.kind.label,
                         body: "Available \(relativeDay(date, now: now, calendar: calendar).lowercased()) at \(time(date, calendar: calendar))",
                         category: NotificationScheduler.movieCategory,
                         posterPath: title.posterPath,
@@ -152,7 +152,11 @@ enum NotificationPlanner {
             let releases = digestReleases(library: library, from: fire, to: end, calendar: calendar)
             guard !releases.isEmpty else { continue }
 
-            let shown = releases.prefix(3).map { "\($0.title) · \($0.label)" }.joined(separator: "\n")
+            let shown = releases.prefix(3).map { release -> String in
+                release.hasTime
+                    ? "\(release.title) · \(release.label) · \(time(release.date, calendar: calendar))"
+                    : "\(release.title) · \(release.label)"
+            }.joined(separator: "\n")
             let extra = releases.count > 3 ? "\n+\(releases.count - 3) more" : ""
             let id = digestPrefix + dayKey(fire, calendar: calendar)
             alerts.append(PlannedAlert(
@@ -162,7 +166,8 @@ enum NotificationPlanner {
                 subtitle: nil,
                 body: shown + extra,
                 category: digestCategory,
-                posterPath: nil,
+                // The soonest show's art fronts the lineup; one poster per banner.
+                posterPath: releases.compactMap(\.posterPath).first,
                 userInfo: ["kind": "digest"]
             ))
         }
@@ -173,6 +178,10 @@ enum NotificationPlanner {
         let title: String
         let label: String
         let date: Date
+        /// Release data is honest about the clock: TV entries always carry an exact
+        /// air moment, movies only when the provider supplied one.
+        let hasTime: Bool
+        let posterPath: String?
     }
 
     private static func digestReleases(
@@ -195,7 +204,9 @@ enum NotificationPlanner {
                     releases.append(DigestRelease(
                         title: title.name,
                         label: "S\(episode.seasonNumber)E\(episode.episodeNumber)",
-                        date: date
+                        date: date,
+                        hasTime: true,
+                        posterPath: title.posterPath
                     ))
                 }
             case .movie:
@@ -204,7 +215,9 @@ enum NotificationPlanner {
                     releases.append(DigestRelease(
                         title: title.name,
                         label: release.kind.label,
-                        date: date
+                        date: date,
+                        hasTime: release.hasTime,
+                        posterPath: title.posterPath
                     ))
                 }
             }
@@ -285,7 +298,9 @@ enum NotificationPlanner {
     }
 
     private static let timeFormatter: DateFormatter = {
+        // The POSIX locale keeps "HH:mm" 24-hour; a 12-hour system locale otherwise rewrites it.
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "HH:mm"
         return f
     }()
@@ -297,6 +312,7 @@ enum NotificationPlanner {
 
     private static let dayKeyFormatter: DateFormatter = {
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
@@ -306,10 +322,12 @@ enum NotificationPlanner {
         return dayKeyFormatter.string(from: date)
     }
 
-    /// Notification strings come from provider data; trim the edges and keep banners readable.
+    /// Notification strings come from provider data; trim the edges, collapse squashed
+    /// whitespace runs, and keep banners readable.
     static func sanitized(_ value: String, limit: Int) -> String {
         let clean = value
             .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: " {2,}", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard clean.count > limit else { return clean }
         return String(clean.prefix(limit - 1)) + "…"
