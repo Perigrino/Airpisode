@@ -4,8 +4,14 @@ import SwiftUI
 /// watches without timestamps live in an “Earlier” bucket rather than getting a fake date.
 struct DiaryView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var searchText = ""
+    @State private var filter: DiaryFilter = .all
 
-    private var entries: [DiaryEntry] { appState.library.diaryEntries() }
+    private var allEntries: [DiaryEntry] { appState.library.diaryEntries() }
+    private var entries: [DiaryEntry] {
+        appState.library.diaryEntries(filter: filter, search: searchText)
+    }
+    private var stats: DiaryStats { appState.library.diaryStats() }
 
     var body: some View {
         ScrollView {
@@ -15,35 +21,42 @@ struct DiaryView: View {
                     subtitle: "Everything you've marked watched, newest first"
                 )
 
-                if entries.isEmpty {
+                if allEntries.isEmpty {
                     emptyState
                 } else {
-                    ForEach(groups) { group in
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text(group.title)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                    .textCase(.uppercase)
-                                Spacer()
-                                Text("\(group.entries.count)")
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-                            LazyVStack(spacing: 2) {
-                                ForEach(group.entries) { entry in
-                                    row(entry)
-                                    if entry.id != group.entries.last?.id {
-                                        Divider().padding(.leading, 52)
+                    statsCard
+                    controls
+
+                    if entries.isEmpty {
+                        noMatches
+                    } else {
+                        ForEach(groups) { group in
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Text(group.title)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .textCase(.uppercase)
+                                    Spacer()
+                                    Text("\(group.entries.count)")
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+                                LazyVStack(spacing: 2) {
+                                    ForEach(group.entries) { entry in
+                                        row(entry)
+                                        if entry.id != group.entries.last?.id {
+                                            Divider().padding(.leading, 52)
+                                        }
                                     }
                                 }
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(PosterTintedCard(posterPath: nil))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(PosterTintedCard(posterPath: nil))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .appear()
                         }
-                        .appear()
                     }
                 }
             }
@@ -54,6 +67,110 @@ struct DiaryView: View {
         .scrollIndicators(.hidden)
         .screenBackground()
         .navigationTitle("Diary")
+    }
+
+    // MARK: - Summary
+
+    private var statsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 0) {
+                stat("This month", "\(stats.monthTotal)")
+                statDivider
+                stat("Episodes", "\(stats.lifetimeEpisodes)")
+                statDivider
+                stat("Movies", "\(stats.lifetimeMovies)")
+                statDivider
+                stat("Day streak", "\(stats.currentStreak)")
+            }
+
+            if stats.undatedCount > 0 {
+                Text("\(stats.undatedCount) watch\(stats.undatedCount == 1 ? "" : "es") from before dates were recorded appear under Earlier.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(PosterTintedCard(posterPath: nil))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func stat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value)
+                .font(.title3.monospacedDigit().weight(.semibold))
+                .contentTransition(.numericText())
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var statDivider: some View {
+        Divider()
+            .frame(height: 30)
+            .padding(.horizontal, 10)
+    }
+
+    // MARK: - Search and filter
+
+    private var controls: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                TextField("Search diary", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.subheadline)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear search")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+            )
+
+            Picker("Filter", selection: $filter) {
+                ForEach(DiaryFilter.allCases) { filter in
+                    Text(filter.label).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+    }
+
+    private var noMatches: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 30))
+                .foregroundStyle(.tertiary)
+            Text("No matches")
+                .font(.headline)
+            Text("Try a different show, episode, or filter.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Button("Clear filters") {
+                withAnimation(Motion.smooth) {
+                    searchText = ""
+                    filter = .all
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
 
     private var emptyState: some View {
@@ -75,6 +192,8 @@ struct DiaryView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
     }
+
+    // MARK: - Rows
 
     private func row(_ entry: DiaryEntry) -> some View {
         HStack(spacing: 12) {
@@ -114,6 +233,8 @@ struct DiaryView: View {
             appState.setMovieWatched(false, titleID: entry.record.titleID)
         }
     }
+
+    // MARK: - Grouping
 
     private struct DiaryGroup: Identifiable {
         let id: String

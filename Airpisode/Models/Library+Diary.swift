@@ -1,5 +1,27 @@
 import Foundation
 
+enum DiaryFilter: String, CaseIterable, Identifiable {
+    case all, episodes, movies
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all: return "All"
+        case .episodes: return "Episodes"
+        case .movies: return "Movies"
+        }
+    }
+
+    func matches(_ entry: DiaryEntry) -> Bool {
+        switch self {
+        case .all: return true
+        case .episodes: return entry.kind == .episode
+        case .movies: return entry.kind == .movie
+        }
+    }
+}
+
 /// A watch-log record joined to the title and episode/release it refers to. Records whose
 /// title or episode is no longer loaded are skipped rather than shown as blank rows.
 struct DiaryEntry: Identifiable {
@@ -22,6 +44,25 @@ struct DiaryEntry: Identifiable {
             return "\(release.kind.label) · \(release.region)"
         }
     }
+
+    func matches(search: String) -> Bool {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        return [title.name, label, episode?.name ?? ""]
+            .contains { $0.localizedStandardContains(query) }
+    }
+}
+
+struct DiaryStats: Equatable {
+    let lifetimeEpisodes: Int
+    let lifetimeMovies: Int
+    let episodesThisMonth: Int
+    let moviesThisMonth: Int
+    let currentStreak: Int
+    let undatedCount: Int
+
+    var monthTotal: Int { episodesThisMonth + moviesThisMonth }
+    var lifetimeTotal: Int { lifetimeEpisodes + lifetimeMovies }
 }
 
 extension Library {
@@ -59,5 +100,55 @@ extension Library {
             if lhs.title.name != rhs.title.name { return lhs.title.name < rhs.title.name }
             return lhs.label < rhs.label
         }
+    }
+
+    /// Search and type filtering happen after the diary join, so legacy undated watchers are
+    /// just as searchable as newly timestamped ones.
+    func diaryEntries(
+        now: Date = .now,
+        filter: DiaryFilter,
+        search: String
+    ) -> [DiaryEntry] {
+        diaryEntries(now: now).filter {
+            filter.matches($0) && $0.matches(search: search)
+        }
+    }
+
+    /// Counts only diary entries that still resolve to a title. Month and streak numbers use
+    /// dated records exclusively; legacy records contribute only to lifetime and undated totals.
+    func diaryStats(now: Date = .now, calendar: Calendar = .current) -> DiaryStats {
+        let entries = diaryEntries(now: now)
+        let episodes = entries.filter { $0.kind == .episode }
+        let movies = entries.filter { $0.kind == .movie }
+        let dated = entries.compactMap(\.date)
+
+        let episodesThisMonth = episodes.filter {
+            guard let date = $0.date else { return false }
+            return calendar.isDate(date, equalTo: now, toGranularity: .month)
+        }.count
+        let moviesThisMonth = movies.filter {
+            guard let date = $0.date else { return false }
+            return calendar.isDate(date, equalTo: now, toGranularity: .month)
+        }.count
+
+        let days = Set(dated.map { calendar.startOfDay(for: $0) })
+        let today = calendar.startOfDay(for: now)
+        var cursor = days.contains(today)
+            ? today
+            : calendar.date(byAdding: .day, value: -1, to: today)
+        var streak = 0
+        while let day = cursor, days.contains(day) {
+            streak += 1
+            cursor = calendar.date(byAdding: .day, value: -1, to: day)
+        }
+
+        return DiaryStats(
+            lifetimeEpisodes: episodes.count,
+            lifetimeMovies: movies.count,
+            episodesThisMonth: episodesThisMonth,
+            moviesThisMonth: moviesThisMonth,
+            currentStreak: streak,
+            undatedCount: entries.filter { $0.date == nil }.count
+        )
     }
 }

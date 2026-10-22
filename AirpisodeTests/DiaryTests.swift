@@ -22,7 +22,15 @@ final class DiaryTests: XCTestCase {
             Episode(
                 tmdbID: 100, seasonNumber: 2, episodeNumber: 5, name: "Woe's Hollow",
                 overview: nil, airDate: days(-10), stillPath: nil
-            )
+            ),
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 6, name: "Cold Harbor",
+                overview: nil, airDate: days(-9), stillPath: nil
+            ),
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 7, name: "Day 7",
+                overview: nil, airDate: days(-8), stillPath: nil
+            ),
         ]
         lib.movieReleases["movie-200"] = [
             MovieRelease(tmdbID: 200, kind: .digital, region: "US", date: days(-2), hasTime: false)
@@ -66,6 +74,84 @@ final class DiaryTests: XCTestCase {
         ]
 
         XCTAssertTrue(lib.diaryEntries(now: now).isEmpty)
+    }
+
+    func testDiarySearchMatchesShowEpisodeAndMovie() {
+        var lib = makeLibrary()
+        lib.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s2e5", watchedAt: now),
+            WatchRecord(kind: .movie, titleID: "movie-200", itemID: "movie-200", watchedAt: now),
+        ]
+
+        XCTAssertEqual(lib.diaryEntries(now: now, filter: .all, search: "severance").count, 1)
+        XCTAssertEqual(lib.diaryEntries(now: now, filter: .all, search: "woe").count, 1)
+        XCTAssertEqual(lib.diaryEntries(now: now, filter: .all, search: "dune").count, 1)
+        XCTAssertEqual(lib.diaryEntries(now: now, filter: .all, search: "digital").count, 1)
+        XCTAssertEqual(
+            lib.diaryEntries(now: now, filter: .all, search: "  WOE  ").count, 1,
+            "search trims whitespace and ignores case"
+        )
+    }
+
+    func testDiaryFilterSeparatesEpisodesAndMovies() {
+        var lib = makeLibrary()
+        lib.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s2e5", watchedAt: now),
+            WatchRecord(kind: .movie, titleID: "movie-200", itemID: "movie-200", watchedAt: now),
+        ]
+
+        XCTAssertEqual(lib.diaryEntries(now: now, filter: .all, search: "").count, 2)
+        XCTAssertEqual(lib.diaryEntries(now: now, filter: .episodes, search: "").count, 1)
+        XCTAssertEqual(lib.diaryEntries(now: now, filter: .movies, search: "").count, 1)
+        XCTAssertTrue(lib.diaryEntries(now: now, filter: .episodes, search: "dune").isEmpty)
+    }
+
+    func testDiaryStatsCountLifetimeMonthAndUndated() {
+        var lib = makeLibrary()
+        lib.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s2e5", watchedAt: days(-1)),
+            WatchRecord(kind: .movie, titleID: "movie-200", itemID: "movie-200", watchedAt: days(-2)),
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s2e6", watchedAt: days(-40)),
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s2e7", watchedAt: nil),
+        ]
+
+        let stats = lib.diaryStats(now: now)
+
+        XCTAssertEqual(stats.lifetimeEpisodes, 3)
+        XCTAssertEqual(stats.lifetimeMovies, 1)
+        XCTAssertEqual(stats.lifetimeTotal, 4)
+        XCTAssertEqual(stats.episodesThisMonth, 1)
+        XCTAssertEqual(stats.moviesThisMonth, 1)
+        XCTAssertEqual(stats.monthTotal, 2)
+        XCTAssertEqual(stats.undatedCount, 1)
+        XCTAssertEqual(stats.currentStreak, 2, "Oct 15 + Oct 14, starting yesterday")
+    }
+
+    func testDiaryStatsStreakResetsAfterGapAndCountsToday() {
+        var lib = makeLibrary()
+        lib.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s2e5", watchedAt: days(0)),
+            WatchRecord(kind: .movie, titleID: "movie-200", itemID: "movie-200", watchedAt: days(-3)),
+        ]
+
+        let stats = lib.diaryStats(now: now)
+
+        XCTAssertEqual(stats.currentStreak, 1, "today counts, the three-day-old watch does not")
+    }
+
+    func testDiaryStatsUndatedOnlyHasNoMonthOrStreak() {
+        var lib = makeLibrary()
+        lib.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s2e5", watchedAt: nil),
+        ]
+
+        let stats = lib.diaryStats(now: now)
+
+        XCTAssertEqual(stats.lifetimeEpisodes, 1)
+        XCTAssertEqual(stats.lifetimeMovies, 0)
+        XCTAssertEqual(stats.monthTotal, 0)
+        XCTAssertEqual(stats.currentStreak, 0)
+        XCTAssertEqual(stats.undatedCount, 1)
     }
 
     func testVersionTwoWatchedSetsBackfillUndatedDiaryRecords() {
