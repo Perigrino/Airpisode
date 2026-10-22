@@ -4,7 +4,6 @@ import UserNotifications
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @State private var permissionDenied = false
-    @State private var showDiagnostics = false
 
     private var prefs: NotificationPreferences { appState.library.preferences }
 
@@ -44,16 +43,6 @@ struct SettingsView: View {
                           systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                 }
-                Button(prefs.permissionRequested ? "Re-request Notification Permission" : "Enable Notifications") {
-                    Task {
-                        let center = UNUserNotificationCenter.current()
-                        _ = try? await center.requestAuthorization(options: [.alert, .sound])
-                        let settings = await center.notificationSettings()
-                        appState.updateNotificationPreferences { $0.permissionRequested = true }
-                        permissionDenied = settings.authorizationStatus == .denied
-                    }
-                }
-
                 Picker("Pre-release alert", selection: Binding(
                     get: { prefs.preAlertHours ?? 0 },
                     set: { hours in appState.updateNotificationPreferences { $0.preAlertHours = hours == 0 ? nil : hours } }
@@ -79,12 +68,6 @@ struct SettingsView: View {
                     set: { on in appState.updateNotificationPreferences { $0.notifyScheduleChanges = on } }
                 ))
 
-                HStack {
-                    Button("Notification Diagnostics…") { showDiagnostics = true }
-                    Spacer()
-                    Button("Send Test Alert") { Task { await appState.sendTestAlert() } }
-                }
-
                 Text("Airpisode looks up episode air times from TVmaze. Releases with a confirmed time get timed alerts; date-only releases are shown without a clock time and get no time-based alert. Use a show's context menu to override the global lead time.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -107,10 +90,6 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 420)
-        .sheet(isPresented: $showDiagnostics) {
-            NotificationDiagnosticsView()
-                .environmentObject(appState)
-        }
         .task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             permissionDenied = prefs.permissionRequested && settings.authorizationStatus == .denied
