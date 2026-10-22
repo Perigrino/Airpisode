@@ -11,6 +11,9 @@ struct PlannedAlert: Identifiable, Equatable {
     let category: String
     let posterPath: String?
     let userInfo: [String: String]
+    /// A near-immediate reminder created because the normal lead-time moment passed while the
+    /// app was closed or relaunching. Uses an interval trigger so it cannot miss the minute.
+    var isCatchUp = false
 }
 
 /// Builds the complete alert set for the library. The scheduler applies this plan as a
@@ -62,16 +65,38 @@ enum NotificationPlanner {
                         )
                     }
                     if let minutes = library.preferences.imminentAlertMinutes {
-                        appendPreAlert(
-                            to: &alerts, id: "imminent-\(title.id)-\(key)",
-                            minutes: minutes, airDate: airDate, now: now,
-                            title: "\(title.name) · \(episodeLabel)",
-                            subtitle: cleanName,
-                            body: "Starts in \(minutes) minutes · \(time(airDate, calendar: calendar))",
-                            category: NotificationScheduler.episodeCategory,
-                            posterPath: title.posterPath,
-                            userInfo: ["titleID": title.id, "key": key, "kind": "episode"]
-                        )
+                        let normalFire = airDate.addingTimeInterval(-TimeInterval(minutes * 60))
+                        let remaining = airDate.timeIntervalSince(now)
+                        if normalFire > now {
+                            appendPreAlert(
+                                to: &alerts, id: "imminent-\(title.id)-\(key)",
+                                minutes: minutes, airDate: airDate, now: now,
+                                title: "\(title.name) · \(episodeLabel)",
+                                subtitle: cleanName,
+                                body: "Starts in \(minutes) minutes · \(time(airDate, calendar: calendar))",
+                                category: NotificationScheduler.episodeCategory,
+                                posterPath: title.posterPath,
+                                userInfo: ["titleID": title.id, "key": key, "kind": "episode"]
+                            )
+                        } else if remaining > 5 {
+                            // Relaunching inside the lead window must not silently drop the
+                            // reminder. Fire shortly after the app is ready instead.
+                            let minutesLeft = max(1, Int(ceil(remaining / 60)))
+                            let body = remaining < 60
+                                ? "Starting now · \(time(airDate, calendar: calendar))"
+                                : "Starts in \(minutesLeft) minutes · \(time(airDate, calendar: calendar))"
+                            alerts.append(PlannedAlert(
+                                id: "imminent-\(title.id)-\(key)",
+                                fireDate: now.addingTimeInterval(5),
+                                title: "\(title.name) · \(episodeLabel)",
+                                subtitle: cleanName,
+                                body: body,
+                                category: NotificationScheduler.episodeCategory,
+                                posterPath: title.posterPath,
+                                userInfo: ["titleID": title.id, "key": key, "kind": "episode"],
+                                isCatchUp: true
+                            ))
+                        }
                     }
                 }
             case .movie:

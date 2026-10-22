@@ -15,6 +15,7 @@ protocol NotificationClientProtocol: Sendable {
     func removePending(withIdentifiers ids: [String])
     func authorizationStatus() async -> UNAuthorizationStatus
     func pendingAlerts() async -> [PendingAlert]
+    func deliveredIDs() async -> Set<String>
 }
 
 struct SystemNotificationClient: NotificationClientProtocol {
@@ -61,6 +62,14 @@ struct SystemNotificationClient: NotificationClientProtocol {
             }
         }
     }
+
+    func deliveredIDs() async -> Set<String> {
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
+                continuation.resume(returning: Set(notifications.map(\.request.identifier)))
+            }
+        }
+    }
 }
 
 struct NotificationScheduler {
@@ -87,7 +96,13 @@ struct NotificationScheduler {
         if !stale.isEmpty {
             client.removePending(withIdentifiers: stale)
         }
+        // A relaunch inside the lead window can produce a catch-up for an alert that already
+        // fired. Delivered IDs are the only reliable way to avoid a duplicate banner.
+        let delivered = plan.contains(where: \.isCatchUp)
+            ? await client.deliveredIDs()
+            : []
         for alert in plan {
+            if alert.isCatchUp && delivered.contains(alert.id) { continue }
             await addAlert(alert)
         }
     }
@@ -221,13 +236,21 @@ struct NotificationScheduler {
         if let posterPath = alert.posterPath {
             await attachPoster(path: posterPath, to: content)
         }
-        let comps = Calendar.current.dateComponents(
-            [.year, .month, .day, .hour, .minute], from: alert.fireDate
-        )
+        let trigger: UNNotificationTrigger
+        if alert.isCatchUp {
+            // Interval triggers are immune to the current-minute boundary that can make a
+            // calendar trigger silently roll forward when the app wakes up late.
+            trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: max(1, alert.fireDate.timeIntervalSinceNow), repeats: false
+            )
+        } else {
+            let comps = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute], from: alert.fireDate
+            )
+            trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        }
         let request = UNNotificationRequest(
-            identifier: alert.id,
-            content: content,
-            trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+            identifier: alert.id, content: content, trigger: trigger
         )
         try? await client.add(request)
     }

@@ -8,12 +8,14 @@ final class MockNotificationClient: NotificationClientProtocol, @unchecked Senda
     var authResult = true
     var authStatus: UNAuthorizationStatus = .authorized
     var pending: [PendingAlert] = []
+    var delivered: Set<String> = []
 
     func requestAuthorization() async throws -> Bool { authResult }
     func add(_ request: UNNotificationRequest) async throws { addCalls.append(request) }
     func removePending(withIdentifiers ids: [String]) { removeCalls.append(ids) }
     func authorizationStatus() async -> UNAuthorizationStatus { authStatus }
     func pendingAlerts() async -> [PendingAlert] { pending }
+    func deliveredIDs() async -> Set<String> { delivered }
 }
 
 final class NotificationSchedulerTests: XCTestCase {
@@ -144,5 +146,39 @@ final class NotificationSchedulerTests: XCTestCase {
         let trigger = mock.addCalls[0].trigger as? UNTimeIntervalNotificationTrigger
         XCTAssertEqual(trigger?.timeInterval, 10)
         XCTAssertTrue(mock.addCalls[0].identifier.hasPrefix(NotificationScheduler.testIDPrefix))
+    }
+
+    func testCatchUpUsesAnIntervalTrigger() async {
+        let mock = MockNotificationClient()
+        let scheduler = NotificationScheduler(client: mock)
+        let prefs = NotificationPreferences(
+            preAlertHours: nil, imminentAlertMinutes: 15, permissionRequested: true
+        )
+        var ep = episode(airDate: now.addingTimeInterval(86_400))
+        ep.airTimestamp = now.addingTimeInterval(600)
+
+        await scheduler.schedule(for: title(), episodes: [ep], prefs: prefs, now: now)
+
+        XCTAssertEqual(mock.addCalls.count, 1)
+        XCTAssertEqual(mock.addCalls[0].identifier, "imminent-tv-100-100-s2e5")
+        let trigger = mock.addCalls[0].trigger as? UNTimeIntervalNotificationTrigger
+        XCTAssertNotNil(trigger)
+        XCTAssertGreaterThan(trigger?.timeInterval ?? 0, 0)
+        XCTAssertLessThanOrEqual(trigger?.timeInterval ?? 99, 6)
+    }
+
+    func testDeliveredCatchUpIsNotScheduledAgain() async {
+        let mock = MockNotificationClient()
+        mock.delivered = ["imminent-tv-100-100-s2e5"]
+        let scheduler = NotificationScheduler(client: mock)
+        let prefs = NotificationPreferences(
+            preAlertHours: nil, imminentAlertMinutes: 15, permissionRequested: true
+        )
+        var ep = episode(airDate: now.addingTimeInterval(86_400))
+        ep.airTimestamp = now.addingTimeInterval(600)
+
+        await scheduler.schedule(for: title(), episodes: [ep], prefs: prefs, now: now)
+
+        XCTAssertTrue(mock.addCalls.isEmpty)
     }
 }
