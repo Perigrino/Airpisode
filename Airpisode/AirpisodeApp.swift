@@ -3,13 +3,14 @@ import UserNotifications
 
 /// The app's top-level destinations, shown as items in the bottom dock.
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
-    case dashboard, shows, movies, discover
+    case dashboard, diary, shows, movies, discover
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .dashboard: return "To Watch"
+        case .diary: return "Diary"
         case .shows: return "My Shows"
         case .movies: return "My Movies"
         case .discover: return "Discover"
@@ -19,6 +20,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .dashboard: return "checklist"
+        case .diary: return "clock.arrow.circlepath"
         case .shows: return "tv"
         case .movies: return "film"
         case .discover: return "magnifyingglass"
@@ -330,6 +332,7 @@ struct RootView: View {
     private var content: some View {
         switch appState.selectedSection ?? .dashboard {
         case .dashboard: DashboardView()
+        case .diary: DiaryView()
         case .shows: MyShowsView()
         case .movies: MyMoviesView()
         case .discover: DiscoverView()

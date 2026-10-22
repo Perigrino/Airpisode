@@ -165,8 +165,23 @@ struct NotificationPreferences: Codable {
     }
 }
 
+/// One item the user marked watched, with the timestamp needed for a diary. Legacy watched
+/// sets migrate into records with `watchedAt == nil` rather than inventing a date.
+struct WatchRecord: Codable, Identifiable, Equatable {
+    enum Kind: String, Codable {
+        case episode, movie
+    }
+
+    let kind: Kind
+    let titleID: String
+    let itemID: String
+    var watchedAt: Date?
+
+    var id: String { "\(kind.rawValue):\(itemID)" }
+}
+
 struct Library: Codable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     var schemaVersion = Library.currentSchemaVersion
     var titles: [String: Title] = [:]
@@ -180,12 +195,15 @@ struct Library: Codable {
     var preferences = NotificationPreferences()
     /// Newest first, capped by `ScheduleChangeRecorder`; old libraries decode to empty.
     var scheduleChanges: [ScheduleChangeRecord] = []
+    /// Watched items with timestamps, used by the diary. The watched sets above stay
+    /// authoritative for filtering and notification suppression.
+    var watchLog: [WatchRecord] = []
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion, titles, entries, watchedShows, watchedMovies
-        case watchedEpisodes, episodes, movieReleases, preferences, scheduleChanges
+        case watchedEpisodes, episodes, movieReleases, preferences, scheduleChanges, watchLog
     }
 
     init(from decoder: Decoder) throws {
@@ -200,13 +218,51 @@ struct Library: Codable {
         movieReleases = try c.decodeIfPresent([String: [MovieRelease]].self, forKey: .movieReleases) ?? [:]
         preferences = try c.decodeIfPresent(NotificationPreferences.self, forKey: .preferences) ?? NotificationPreferences()
         scheduleChanges = try c.decodeIfPresent([ScheduleChangeRecord].self, forKey: .scheduleChanges) ?? []
+        watchLog = try c.decodeIfPresent([WatchRecord].self, forKey: .watchLog) ?? []
     }
 
-    /// Marks a decoded legacy library as current. The caller persists the result once, so a
-    /// failed decode never silently rewrites the user's file.
+    /// Marks a decoded legacy library as current, backfilling a diary record for every watched
+    /// item that predates timestamps. The caller persists the result once, so a failed decode
+    /// never silently rewrites the user's file.
     mutating func migrateSchemaIfNeeded() -> Bool {
         guard schemaVersion < Library.currentSchemaVersion else { return false }
+        if schemaVersion < 3 {
+            backfillWatchLog()
+        }
         schemaVersion = Library.currentSchemaVersion
         return true
+    }
+
+    private mutating func backfillWatchLog() {
+        let known = Set(watchLog.map(\.id))
+        for itemID in watchedEpisodes {
+            let record = WatchRecord(
+                kind: .episode,
+                titleID: episodeTitleID(for: itemID),
+                itemID: itemID,
+                watchedAt: nil
+            )
+            if known.contains(record.id) == false, !record.titleID.isEmpty {
+                watchLog.append(record)
+            }
+        }
+        for titleID in watchedMovies {
+            let record = WatchRecord(
+                kind: .movie, titleID: titleID, itemID: titleID, watchedAt: nil
+            )
+            if known.contains(record.id) == false {
+                watchLog.append(record)
+            }
+        }
+    }
+
+    /// Episode IDs carry the TMDB id (`"100-s2e5"`). Prefer the loaded episode's owning title;
+    /// fall back to the id prefix when old data no longer has the episode.
+    func episodeTitleID(for itemID: String) -> String {
+        for (titleID, episodes) in episodes where episodes.contains(where: { $0.id == itemID }) {
+            return titleID
+        }
+        guard let tmdbID = itemID.split(separator: "-").first else { return "" }
+        return "tv-\(tmdbID)"
     }
 }

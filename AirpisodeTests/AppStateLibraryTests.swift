@@ -138,6 +138,45 @@ final class AppStateLibraryTests: XCTestCase {
         XCTAssertTrue(app.library.watchedEpisodes.isEmpty)
     }
 
+    func testSetEpisodesWatchedRecordsTimestampAndUnwatchRemovesIt() {
+        let app = makeSUT()
+        let episode = episodes(1...1)[0]
+
+        app.setEpisodesWatched(true, episodes: [episode], titleID: "tv-100")
+        let record = app.library.watchLog.first { $0.itemID == episode.id }
+        XCTAssertEqual(record?.kind, .episode)
+        XCTAssertEqual(record?.titleID, "tv-100")
+        XCTAssertNotNil(record?.watchedAt)
+
+        app.setEpisodesWatched(false, episodes: [episode], titleID: "tv-100")
+        XCTAssertFalse(app.library.watchLog.contains { $0.itemID == episode.id })
+    }
+
+    func testSetMovieWatchedRecordsTimestampAndUnwatchRemovesIt() {
+        let app = makeSUT()
+        app.addToLibrary(sampleTitle(tmdbID: 200, mediaType: .movie))
+
+        app.setMovieWatched(true, titleID: "movie-200")
+        XCTAssertEqual(app.library.watchLog.first?.kind, .movie)
+        XCTAssertEqual(app.library.watchLog.first?.titleID, "movie-200")
+        XCTAssertNotNil(app.library.watchLog.first?.watchedAt)
+
+        app.setMovieWatched(false, titleID: "movie-200")
+        XCTAssertTrue(app.library.watchLog.isEmpty)
+    }
+
+    func testRemoveDeletesWatchLogRecords() {
+        let app = makeSUT()
+        app.addToLibrary(sampleTitle())
+        app.library.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s1e1", watchedAt: Date())
+        ]
+
+        app.removeFromLibrary("tv-100")
+
+        XCTAssertTrue(app.library.watchLog.isEmpty)
+    }
+
     func testSetEpisodeWatchedDelegatesToBulk() {
         let app = makeSUT()
         let only = episodes(1...1)[0]

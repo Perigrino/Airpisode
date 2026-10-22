@@ -47,8 +47,9 @@ final class AppState: ObservableObject {
 
     func loadLibrary() async {
         library = await store.load()
-        let migratedSchema = library.migrateSchemaIfNeeded()
+        // Move legacy show-level watches first, then backfill the diary from the final sets.
         let migratedWatched = library.migrateLegacyWatchedState()
+        let migratedSchema = library.migrateSchemaIfNeeded()
         if migratedSchema || migratedWatched { save() }
         rescheduleAll()
     }
@@ -76,6 +77,7 @@ final class AppState: ObservableObject {
         library.watchedMovies.remove(titleID)
         library.watchedEpisodes.subtract(episodes.map(\.id))
         library.scheduleChanges.removeAll { $0.titleID == titleID }
+        library.watchLog.removeAll { $0.titleID == titleID }
         save()
     }
 
@@ -92,12 +94,22 @@ final class AppState: ObservableObject {
     func setEpisodesWatched(_ watched: Bool, episodes: [Episode], titleID: String) {
         guard !episodes.isEmpty else { return }
         let ids = episodes.map(\.id)
+        let now = Date()
         if watched {
             library.watchedEpisodes.formUnion(ids)
+            for id in ids {
+                upsertWatchRecord(
+                    kind: .episode, titleID: titleID, itemID: id, watchedAt: now
+                )
+            }
             // Nothing left to alert about for episodes already watched.
             notifications.cancelAll(forTitle: titleID, keys: ids)
         } else {
             library.watchedEpisodes.subtract(ids)
+            let removing = Set(ids)
+            library.watchLog.removeAll {
+                $0.kind == .episode && removing.contains($0.itemID)
+            }
         }
         // Reconciliation also handles the unwatched case: a returning episode can rejoin
         // the plan, while watched IDs disappear from it.
@@ -109,11 +121,34 @@ final class AppState: ObservableObject {
     func setMovieWatched(_ watched: Bool, titleID: String) {
         if watched {
             library.watchedMovies.insert(titleID)
+            upsertWatchRecord(
+                kind: .movie, titleID: titleID, itemID: titleID, watchedAt: Date()
+            )
         } else {
             library.watchedMovies.remove(titleID)
+            library.watchLog.removeAll {
+                $0.kind == .movie && $0.itemID == titleID
+            }
         }
         rescheduleAll()
         save()
+    }
+
+    /// One record per item. Re-marking refreshes the timestamp rather than duplicating.
+    private func upsertWatchRecord(
+        kind: WatchRecord.Kind,
+        titleID: String,
+        itemID: String,
+        watchedAt: Date
+    ) {
+        let id = "\(kind.rawValue):\(itemID)"
+        if let index = library.watchLog.firstIndex(where: { $0.id == id }) {
+            library.watchLog[index].watchedAt = watchedAt
+        } else {
+            library.watchLog.append(WatchRecord(
+                kind: kind, titleID: titleID, itemID: itemID, watchedAt: watchedAt
+            ))
+        }
     }
 
     /// Mutes (or unmutes) a title's alerts. Muting cancels everything already scheduled for

@@ -2,7 +2,7 @@ import XCTest
 @testable import Airpisode
 
 final class LibraryMigrationTests: XCTestCase {
-    func testVersionOneLibraryDecodesIntoVersionTwoDefaults() throws {
+    func testVersionOneLibraryDecodesIntoCurrentDefaults() throws {
         let json = """
         {
           "schemaVersion": 1,
@@ -21,6 +21,7 @@ final class LibraryMigrationTests: XCTestCase {
         XCTAssertTrue(library.migrateSchemaIfNeeded())
         XCTAssertEqual(library.schemaVersion, Library.currentSchemaVersion)
         XCTAssertTrue(library.scheduleChanges.isEmpty)
+        XCTAssertTrue(library.watchLog.isEmpty)
         XCTAssertEqual(library.preferences.preAlertHours, 24)
         XCTAssertFalse(library.preferences.digestEnabled)
         XCTAssertTrue(library.preferences.notifyScheduleChanges)
