@@ -19,3 +19,6 @@ Airpisode/TMDBKey.xcconfig
 
 # Temporary persistence files
 *.tmp
+
+# Profiler output
+*.profraw
