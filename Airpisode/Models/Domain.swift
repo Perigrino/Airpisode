@@ -180,8 +180,19 @@ struct WatchRecord: Codable, Identifiable, Equatable {
     var id: String { "\(kind.rawValue):\(itemID)" }
 }
 
+/// A compact daily count that survives after the detailed diary records age out. One row per
+/// local calendar day keeps lifetime, monthly, and streak stats intact without retaining every
+/// watch forever.
+struct WatchDaySummary: Codable, Identifiable, Equatable {
+    var day: Date
+    var episodes: Int
+    var movies: Int
+
+    var id: Date { day }
+}
+
 struct Library: Codable {
-    static let currentSchemaVersion = 3
+    static let currentSchemaVersion = 4
 
     var schemaVersion = Library.currentSchemaVersion
     var titles: [String: Title] = [:]
@@ -196,14 +207,21 @@ struct Library: Codable {
     /// Newest first, capped by `ScheduleChangeRecorder`; old libraries decode to empty.
     var scheduleChanges: [ScheduleChangeRecord] = []
     /// Watched items with timestamps, used by the diary. The watched sets above stay
-    /// authoritative for filtering and notification suppression.
+    /// authoritative for filtering and notification suppression. Only the most recent detail
+    /// is retained; older days live on in `watchDays`.
     var watchLog: [WatchRecord] = []
+    /// Lifetime daily aggregates. Pruning `watchLog` never changes these.
+    var watchDays: [WatchDaySummary] = []
+    /// Legacy watches that never had a timestamp. They are retained in `watchLog` and counted
+    /// here because they cannot be assigned to a day.
+    var undatedWatchCount = 0
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion, titles, entries, watchedShows, watchedMovies
         case watchedEpisodes, episodes, movieReleases, preferences, scheduleChanges, watchLog
+        case watchDays, undatedWatchCount
     }
 
     init(from decoder: Decoder) throws {
@@ -219,15 +237,21 @@ struct Library: Codable {
         preferences = try c.decodeIfPresent(NotificationPreferences.self, forKey: .preferences) ?? NotificationPreferences()
         scheduleChanges = try c.decodeIfPresent([ScheduleChangeRecord].self, forKey: .scheduleChanges) ?? []
         watchLog = try c.decodeIfPresent([WatchRecord].self, forKey: .watchLog) ?? []
+        watchDays = try c.decodeIfPresent([WatchDaySummary].self, forKey: .watchDays) ?? []
+        undatedWatchCount = try c.decodeIfPresent(Int.self, forKey: .undatedWatchCount) ?? 0
     }
 
     /// Marks a decoded legacy library as current, backfilling a diary record for every watched
     /// item that predates timestamps. The caller persists the result once, so a failed decode
     /// never silently rewrites the user's file.
-    mutating func migrateSchemaIfNeeded() -> Bool {
+    mutating func migrateSchemaIfNeeded(calendar: Calendar = .current) -> Bool {
         guard schemaVersion < Library.currentSchemaVersion else { return false }
         if schemaVersion < 3 {
             backfillWatchLog()
+        }
+        if schemaVersion < 4 {
+            // Build the compact history before any pruning can discard the source records.
+            rebuildWatchSummary(calendar: calendar)
         }
         schemaVersion = Library.currentSchemaVersion
         return true

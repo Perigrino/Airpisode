@@ -50,7 +50,8 @@ final class AppState: ObservableObject {
         // Move legacy show-level watches first, then backfill the diary from the final sets.
         let migratedWatched = library.migrateLegacyWatchedState()
         let migratedSchema = library.migrateSchemaIfNeeded()
-        if migratedSchema || migratedWatched { save() }
+        let pruned = library.pruneWatchLog()
+        if migratedSchema || migratedWatched || pruned > 0 { save() }
         rescheduleAll()
     }
 
@@ -77,7 +78,8 @@ final class AppState: ObservableObject {
         library.watchedMovies.remove(titleID)
         library.watchedEpisodes.subtract(episodes.map(\.id))
         library.scheduleChanges.removeAll { $0.titleID == titleID }
-        library.watchLog.removeAll { $0.titleID == titleID }
+        library.removeWatchRecords { $0.titleID == titleID }
+        _ = library.pruneWatchLog()
         save()
     }
 
@@ -107,10 +109,11 @@ final class AppState: ObservableObject {
         } else {
             library.watchedEpisodes.subtract(ids)
             let removing = Set(ids)
-            library.watchLog.removeAll {
+            library.removeWatchRecords {
                 $0.kind == .episode && removing.contains($0.itemID)
             }
         }
+        _ = library.pruneWatchLog()
         // Reconciliation also handles the unwatched case: a returning episode can rejoin
         // the plan, while watched IDs disappear from it.
         rescheduleAll()
@@ -126,10 +129,11 @@ final class AppState: ObservableObject {
             )
         } else {
             library.watchedMovies.remove(titleID)
-            library.watchLog.removeAll {
+            library.removeWatchRecords {
                 $0.kind == .movie && $0.itemID == titleID
             }
         }
+        _ = library.pruneWatchLog()
         rescheduleAll()
         save()
     }
@@ -141,14 +145,9 @@ final class AppState: ObservableObject {
         itemID: String,
         watchedAt: Date
     ) {
-        let id = "\(kind.rawValue):\(itemID)"
-        if let index = library.watchLog.firstIndex(where: { $0.id == id }) {
-            library.watchLog[index].watchedAt = watchedAt
-        } else {
-            library.watchLog.append(WatchRecord(
-                kind: kind, titleID: titleID, itemID: itemID, watchedAt: watchedAt
-            ))
-        }
+        library.upsertWatchRecord(
+            kind: kind, titleID: titleID, itemID: itemID, watchedAt: watchedAt
+        )
     }
 
     /// Mutes (or unmutes) a title's alerts. Muting cancels everything already scheduled for

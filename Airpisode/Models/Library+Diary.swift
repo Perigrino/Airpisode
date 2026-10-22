@@ -66,10 +66,23 @@ struct DiaryStats: Equatable {
 }
 
 extension Library {
-    /// Everything marked watched, newest first. Legacy records without a timestamp sort last
-    /// so the diary never invents a date the user did not provide.
-    func diaryEntries(now: Date = .now) -> [DiaryEntry] {
-        watchLog.compactMap { record -> DiaryEntry? in
+    static let diaryDetailDays = 7
+
+    /// Start of the oldest day still shown in the diary. Keeps today plus the previous six
+    /// calendar days.
+    func diaryCutoff(now: Date = .now, calendar: Calendar = .current) -> Date {
+        let today = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .day, value: -(Self.diaryDetailDays - 1), to: today)
+            ?? today
+    }
+
+    /// Recent diary detail, newest first. Legacy records without a timestamp sort last so the
+    /// diary never invents a date the user did not provide. Dated records outside the rolling
+    /// window are hidden even if pruning has not run yet.
+    func diaryEntries(now: Date = .now, calendar: Calendar = .current) -> [DiaryEntry] {
+        let cutoff = diaryCutoff(now: now, calendar: calendar)
+        return watchLog.compactMap { record -> DiaryEntry? in
+            if let watchedAt = record.watchedAt, watchedAt < cutoff { return nil }
             guard let title = titles[record.titleID] else { return nil }
             switch record.kind {
             case .episode:
@@ -106,32 +119,43 @@ extension Library {
     /// just as searchable as newly timestamped ones.
     func diaryEntries(
         now: Date = .now,
+        calendar: Calendar = .current,
         filter: DiaryFilter,
         search: String
     ) -> [DiaryEntry] {
-        diaryEntries(now: now).filter {
+        diaryEntries(now: now, calendar: calendar).filter {
             filter.matches($0) && $0.matches(search: search)
         }
     }
 
-    /// Counts only diary entries that still resolve to a title. Month and streak numbers use
-    /// dated records exclusively; legacy records contribute only to lifetime and undated totals.
+    /// Stats come from the compact daily history, so deleting older diary detail does not
+    /// reduce lifetime, monthly, or streak numbers. Undated legacy records are retained and
+    /// counted separately; they contribute to lifetime totals but never to a month or streak.
     func diaryStats(now: Date = .now, calendar: Calendar = .current) -> DiaryStats {
-        let entries = diaryEntries(now: now)
-        let episodes = entries.filter { $0.kind == .episode }
-        let movies = entries.filter { $0.kind == .movie }
-        let dated = entries.compactMap(\.date)
+        let undatedEntries = diaryEntries(now: now, calendar: calendar).filter { $0.date == nil }
+        let undatedEpisodes = undatedEntries.filter { $0.kind == .episode }.count
+        let undatedMovies = undatedEntries.filter { $0.kind == .movie }.count
 
-        let episodesThisMonth = episodes.filter {
-            guard let date = $0.date else { return false }
-            return calendar.isDate(date, equalTo: now, toGranularity: .month)
-        }.count
-        let moviesThisMonth = movies.filter {
-            guard let date = $0.date else { return false }
-            return calendar.isDate(date, equalTo: now, toGranularity: .month)
-        }.count
+        let lifetimeEpisodes = watchDays.reduce(0) { $0 + $1.episodes } + undatedEpisodes
+        let lifetimeMovies = watchDays.reduce(0) { $0 + $1.movies } + undatedMovies
+        let episodesThisMonth = watchDays.reduce(0) { total, summary in
+            guard calendar.isDate(summary.day, equalTo: now, toGranularity: .month) else {
+                return total
+            }
+            return total + summary.episodes
+        }
+        let moviesThisMonth = watchDays.reduce(0) { total, summary in
+            guard calendar.isDate(summary.day, equalTo: now, toGranularity: .month) else {
+                return total
+            }
+            return total + summary.movies
+        }
 
-        let days = Set(dated.map { calendar.startOfDay(for: $0) })
+        let days = Set(
+            watchDays
+                .filter { $0.episodes + $0.movies > 0 }
+                .map { calendar.startOfDay(for: $0.day) }
+        )
         let today = calendar.startOfDay(for: now)
         var cursor = days.contains(today)
             ? today
@@ -143,12 +167,130 @@ extension Library {
         }
 
         return DiaryStats(
-            lifetimeEpisodes: episodes.count,
-            lifetimeMovies: movies.count,
+            lifetimeEpisodes: lifetimeEpisodes,
+            lifetimeMovies: lifetimeMovies,
             episodesThisMonth: episodesThisMonth,
             moviesThisMonth: moviesThisMonth,
             currentStreak: streak,
-            undatedCount: entries.filter { $0.date == nil }.count
+            undatedCount: undatedEntries.count
         )
+    }
+
+    // MARK: - Compact history
+
+    /// Rebuilds `watchDays` and `undatedWatchCount` from the detailed log. Used by schema
+    /// migration and tests; normal mutations update the summary incrementally.
+    mutating func rebuildWatchSummary(calendar: Calendar = .current) {
+        watchDays = []
+        undatedWatchCount = 0
+        for record in watchLog {
+            noteWatch(record, calendar: calendar)
+        }
+    }
+
+    /// Adds one watch record to the compact history.
+    mutating func noteWatch(_ record: WatchRecord, calendar: Calendar = .current) {
+        guard let watchedAt = record.watchedAt else {
+            undatedWatchCount += 1
+            return
+        }
+        addWatch(kind: record.kind, on: watchedAt, calendar: calendar)
+    }
+
+    /// Removes one watch record from the compact history. Call this before dropping the record
+    /// from `watchLog`.
+    mutating func forgetWatch(_ record: WatchRecord, calendar: Calendar = .current) {
+        guard let watchedAt = record.watchedAt else {
+            undatedWatchCount = max(0, undatedWatchCount - 1)
+            return
+        }
+        let day = calendar.startOfDay(for: watchedAt)
+        guard let index = watchDays.firstIndex(where: {
+            calendar.isDate($0.day, inSameDayAs: day)
+        }) else { return }
+        switch record.kind {
+        case .episode:
+            watchDays[index].episodes = max(0, watchDays[index].episodes - 1)
+        case .movie:
+            watchDays[index].movies = max(0, watchDays[index].movies - 1)
+        }
+        if watchDays[index].episodes == 0 && watchDays[index].movies == 0 {
+            watchDays.remove(at: index)
+        }
+    }
+
+    /// One diary record per item. Re-marking refreshes the timestamp and moves the daily count
+    /// rather than duplicating it.
+    mutating func upsertWatchRecord(
+        kind: WatchRecord.Kind,
+        titleID: String,
+        itemID: String,
+        watchedAt: Date,
+        calendar: Calendar = .current
+    ) {
+        let id = "\(kind.rawValue):\(itemID)"
+        if let index = watchLog.firstIndex(where: { $0.id == id }) {
+            forgetWatch(watchLog[index], calendar: calendar)
+            watchLog[index].watchedAt = watchedAt
+            noteWatch(watchLog[index], calendar: calendar)
+        } else {
+            let record = WatchRecord(
+                kind: kind, titleID: titleID, itemID: itemID, watchedAt: watchedAt
+            )
+            watchLog.append(record)
+            noteWatch(record, calendar: calendar)
+        }
+    }
+
+    /// Removes matching detail records while decrementing their compact-history contribution.
+    mutating func removeWatchRecords(
+        calendar: Calendar = .current,
+        where shouldRemove: (WatchRecord) -> Bool
+    ) {
+        var kept: [WatchRecord] = []
+        for record in watchLog {
+            if shouldRemove(record) {
+                forgetWatch(record, calendar: calendar)
+            } else {
+                kept.append(record)
+            }
+        }
+        watchLog = kept
+    }
+
+    /// Permanently drops dated detail outside the rolling window. Undated legacy records stay,
+    /// and the compact summary is intentionally untouched so lifetime stats survive.
+    @discardableResult
+    mutating func pruneWatchLog(now: Date = .now, calendar: Calendar = .current) -> Int {
+        let cutoff = diaryCutoff(now: now, calendar: calendar)
+        let before = watchLog.count
+        watchLog.removeAll { record in
+            guard let watchedAt = record.watchedAt else { return false }
+            return watchedAt < cutoff
+        }
+        return before - watchLog.count
+    }
+
+    private mutating func addWatch(
+        kind: WatchRecord.Kind,
+        on date: Date,
+        calendar: Calendar
+    ) {
+        let day = calendar.startOfDay(for: date)
+        if let index = watchDays.firstIndex(where: {
+            calendar.isDate($0.day, inSameDayAs: day)
+        }) {
+            switch kind {
+            case .episode: watchDays[index].episodes += 1
+            case .movie: watchDays[index].movies += 1
+            }
+        } else {
+            watchDays.append(WatchDaySummary(
+                day: day,
+                episodes: kind == .episode ? 1 : 0,
+                movies: kind == .movie ? 1 : 0
+            ))
+        }
+        watchDays.sort { $0.day < $1.day }
     }
 }

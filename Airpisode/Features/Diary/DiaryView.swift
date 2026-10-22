@@ -7,28 +7,37 @@ struct DiaryView: View {
     @State private var searchText = ""
     @State private var filter: DiaryFilter = .all
 
-    private var allEntries: [DiaryEntry] { appState.library.diaryEntries() }
     private var entries: [DiaryEntry] {
         appState.library.diaryEntries(filter: filter, search: searchText)
     }
     private var stats: DiaryStats { appState.library.diaryStats() }
+    private var hasHistory: Bool {
+        stats.lifetimeTotal > 0 || stats.undatedCount > 0
+    }
+    private var isFiltering: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || filter != .all
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 PageHeader(
                     title: "Diary",
-                    subtitle: "Everything you've marked watched, newest first"
+                    subtitle: "Last 7 days · full history in stats"
                 )
 
-                if allEntries.isEmpty {
+                if !hasHistory {
                     emptyState
                 } else {
                     statsCard
                     controls
 
                     if entries.isEmpty {
-                        noMatches
+                        if isFiltering {
+                            noMatches
+                        } else {
+                            noRecent
+                        }
                     } else {
                         ForEach(groups) { group in
                             VStack(alignment: .leading, spacing: 10) {
@@ -168,6 +177,21 @@ struct DiaryView: View {
                     filter = .all
                 }
             }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+
+    private var noRecent: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 30))
+                .foregroundStyle(.tertiary)
+            Text("No watches in the last 7 days")
+                .font(.headline)
+            Text("Your full history is still counted in the stats above.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)

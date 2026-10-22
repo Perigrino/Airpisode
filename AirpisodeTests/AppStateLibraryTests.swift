@@ -246,4 +246,82 @@ final class AppStateLibraryTests: XCTestCase {
         XCTAssertEqual(person?.placeOfBirth, "Santa Cruz, California, USA")
         XCTAssertEqual(stub.personCallCount, 1)
     }
+
+    func testSetEpisodesWatchedUpdatesDailySummary() {
+        let app = makeSUT()
+        let episode = episodes(1...1)[0]
+
+        app.setEpisodesWatched(true, episodes: [episode], titleID: "tv-100")
+        XCTAssertEqual(app.library.watchDays.count, 1)
+        XCTAssertEqual(app.library.watchDays.first?.episodes, 1)
+        XCTAssertEqual(app.library.watchDays.first?.movies, 0)
+
+        app.setEpisodesWatched(false, episodes: [episode], titleID: "tv-100")
+        XCTAssertTrue(app.library.watchDays.isEmpty)
+    }
+
+    func testSetMovieWatchedUpdatesDailySummary() {
+        let app = makeSUT()
+        app.addToLibrary(sampleTitle(tmdbID: 200, mediaType: .movie))
+
+        app.setMovieWatched(true, titleID: "movie-200")
+        XCTAssertEqual(app.library.watchDays.count, 1)
+        XCTAssertEqual(app.library.watchDays.first?.episodes, 0)
+        XCTAssertEqual(app.library.watchDays.first?.movies, 1)
+
+        app.setMovieWatched(false, titleID: "movie-200")
+        XCTAssertTrue(app.library.watchDays.isEmpty)
+    }
+
+    func testRemoveFromLibraryRemovesDailySummaryContribution() {
+        let app = makeSUT()
+        app.addToLibrary(sampleTitle())
+        app.library.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s1e1", watchedAt: Date())
+        ]
+        app.library.rebuildWatchSummary()
+        XCTAssertEqual(app.library.watchDays.count, 1)
+
+        app.removeFromLibrary("tv-100")
+
+        XCTAssertTrue(app.library.watchDays.isEmpty)
+        XCTAssertEqual(app.library.undatedWatchCount, 0)
+    }
+
+    func testWatchMutationPrunesOldDiaryDetailButKeepsStats() {
+        let app = makeSUT()
+        let old = Date().addingTimeInterval(-8 * 86_400)
+        app.library.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s1e1", watchedAt: old)
+        ]
+        app.library.rebuildWatchSummary()
+
+        app.setMovieWatched(false, titleID: "movie-200")
+
+        XCTAssertFalse(app.library.watchLog.contains { $0.itemID == "100-s1e1" })
+        XCTAssertEqual(app.library.watchDays.count, 1, "pruning keeps the aggregate")
+    }
+
+    func testLoadLibraryPrunesOldDiaryDetail() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = LibraryStore(directory: dir)
+        var library = Library()
+        library.titles["tv-100"] = sampleTitle()
+        let old = Date().addingTimeInterval(-8 * 86_400)
+        library.watchLog = [
+            WatchRecord(kind: .episode, titleID: "tv-100", itemID: "100-s1e1", watchedAt: old)
+        ]
+        library.rebuildWatchSummary()
+        try await store.save(library)
+
+        let app = AppState(
+            store: store,
+            tmdb: StubTMDBClient(),
+            notifications: NotificationScheduler(client: MockNotificationClient())
+        )
+        await app.loadLibrary()
+
+        XCTAssertFalse(app.library.watchLog.contains { $0.itemID == "100-s1e1" })
+        XCTAssertEqual(app.library.watchDays.count, 1)
+    }
 }
