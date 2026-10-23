@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 enum Secrets {
     /// The user's TMDB API key: one entered in Settings wins, otherwise the build-time
@@ -43,6 +44,106 @@ final class AppState: ObservableObject {
         // The UN delegate is a singleton slot: install this state so banner action taps
         // (Mark watched / Mute) reach the library mutations.
         AppDelegate.actionHandler = self
+        installSystemObservers()
+    }
+
+    // MARK: - System observers
+
+    private var systemObservers: [NSObjectProtocol] = []
+
+    /// Waking from sleep or coming to the front is exactly when a calendar trigger may have
+    /// been missed or the library may have gone stale. Both moments reconcile immediately,
+    /// with a short late-catch-up window so a premiere that started while asleep still speaks.
+    private func installSystemObservers() {
+        let wake = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.handleSystemWake() }
+        }
+        let active = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.handleSystemWake() }
+        }
+        systemObservers = [wake, active]
+    }
+
+    /// The last wake/activation that was allowed to raise a late catch-up. A 15-minute floor
+    /// keeps repeated window switches from resurrecting a banner the user already dismissed.
+    private var lastLateCatchUpAt: Date?
+
+    func handleSystemWake(now: Date = .now) async {
+        if Secrets.hasKey { await refreshSoonAiringTitles(now: now) }
+        let window: TimeInterval
+        if let last = lastLateCatchUpAt, now.timeIntervalSince(last) < 900 {
+            window = 0
+        } else {
+            window = 1_800
+            lastLateCatchUpAt = now
+        }
+        rescheduleAll(now: now, catchUpWindow: window)
+    }
+
+    // MARK: - Alert reconciler
+
+    private var alertReconciler: Timer?
+    /// Bumped once per reconcile so tests can observe the ticker without network.
+    private(set) var alertReconcileTicks = 0
+
+    /// A minute-level reconcile keeps the pending queue truthful while the app runs: alerts
+    /// whose lead window just opened become catch-ups, dismissed ones are not resurrected,
+    /// and an alert the system silently dropped is re-added. Idempotent by design, so it is
+    /// cheap to run this often.
+    func startAlertReconciler(every: TimeInterval = 60) {
+        guard alertReconciler == nil else { return }
+        let timer = Timer(timeInterval: every, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in await self?.tickAlertReconcile() }
+        }
+        alertReconciler = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    func isAlertReconcilerRunning() -> Bool { alertReconciler != nil }
+
+    func stopAlertReconciler() {
+        alertReconciler?.invalidate()
+        alertReconciler = nil
+    }
+
+    func tickAlertReconcile(now: Date = .now) async {
+        alertReconcileTicks += 1
+        guard !isRefreshing else { return }
+        rescheduleAll(now: now)
+    }
+
+    /// Refreshes only titles whose next release is close enough to matter. The daily sweep
+    /// still does the full pass; this keeps a late-announced air time or poster honest in the
+    /// hours before its alert, without hammering TMDB for the whole library.
+    func refreshSoonAiringTitles(now: Date = .now, horizon: TimeInterval = 3 * 3600) async {
+        guard !isRefreshing else { return }
+        let due = library.entries.filter { entry in
+            guard entry.isTrackingEnabled, let title = library.titles[entry.id] else { return false }
+            if let refreshed = title.lastRefreshed, now.timeIntervalSince(refreshed) < 1_800 {
+                return false
+            }
+            switch entry.mediaType {
+            case .tv:
+                return (library.episodes[entry.id] ?? []).contains { episode in
+                    guard !library.watchedEpisodes.contains(episode.id),
+                          let moment = episode.airTimestamp ?? episode.airDate
+                    else { return false }
+                    return moment > now && moment.timeIntervalSince(now) <= horizon
+                }
+            case .movie:
+                return (library.movieReleases[entry.id] ?? []).contains { release in
+                    guard let date = release.date else { return false }
+                    return date > now && date.timeIntervalSince(now) <= horizon
+                }
+            }
+        }
+        for entry in due {
+            await refreshTitle(entry.id)
+        }
     }
 
     func loadLibrary() async {
@@ -52,7 +153,9 @@ final class AppState: ObservableObject {
         let migratedSchema = library.migrateSchemaIfNeeded()
         let pruned = library.pruneWatchLog()
         if migratedSchema || migratedWatched || pruned > 0 { save() }
-        rescheduleAll()
+        // Launch is also a catch-up moment: an episode may have started while the app was
+        // closed. The window is short so a banner is not raised for something long past.
+        rescheduleAll(catchUpWindow: 1_800)
     }
 
     // MARK: - Library mutations
@@ -427,7 +530,11 @@ final class AppState: ObservableObject {
         backgroundRefreshTicks += 1
         // A user refresh in flight could collide with the sweep's choices; skip this heartbeat
         // entirely — the next hour covers it.
-        guard !isRefreshing, isDailySweepDue(now: now, in: calendar) else { return }
+        guard !isRefreshing else { return }
+        // Near-airing titles get an individual refresh on every heartbeat so a late air time
+        // or poster is already in place when the alert is due.
+        if Secrets.hasKey { await refreshSoonAiringTitles(now: now) }
+        guard isDailySweepDue(now: now, in: calendar) else { return }
         let failed = await runFullRefresh(force: true, animated: false)
         // Stamp the slot only on a fully successful sweep. When the network was unreachable the
         // slot stays unstamped, and the next hourly heartbeat retries automatically — a 6 AM
@@ -447,10 +554,15 @@ final class AppState: ObservableObject {
 
     /// Reconciles every alert in one pass. Using the whole library is what lets the planner
     /// see the 64-request budget and keep the soonest alerts instead of whichever title was
-    /// scheduled last.
-    private func rescheduleAll() {
+    /// scheduled last. `catchUpWindow` is only non-zero after a wake or launch, when an
+    /// episode may have started while the process was asleep.
+    private func rescheduleAll(now: Date = .now, catchUpWindow: TimeInterval = 0) {
         let snapshot = library
-        Task { await notifications.apply(library: snapshot) }
+        Task {
+            await notifications.apply(
+                library: snapshot, now: now, catchUpWindow: catchUpWindow
+            )
+        }
     }
 
     func notificationDiagnostics(now: Date = .now) async -> NotificationDiagnosticsReport {

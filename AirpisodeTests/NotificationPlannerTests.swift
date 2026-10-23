@@ -186,13 +186,34 @@ final class NotificationPlannerTests: XCTestCase {
             )
         ]
 
-        let plan = NotificationPlanner.plan(library: lib, now: now, calendar: calendar)
+        let plan = NotificationPlanner.plan(
+            library: lib, now: now, calendar: calendar, catchUpWindow: 1_800
+        )
 
         XCTAssertEqual(plan.count, 1)
         XCTAssertEqual(plan[0].id, "imminent-tv-100-100-s2e5")
         XCTAssertTrue(plan[0].isCatchUp)
         XCTAssertEqual(plan[0].fireDate, now.addingTimeInterval(5))
         XCTAssertTrue(plan[0].body.contains("Starts in 10 minutes"))
+    }
+
+    /// The minute-level reconciler must not manufacture a catch-up for an alert that was
+    /// already delivered and then dismissed.
+    func testRoutineReconcileDoesNotRepeatAnAlreadyDeliveredImminent() {
+        var lib = library(prefs: NotificationPreferences(
+            preAlertHours: nil, imminentAlertMinutes: 15, permissionRequested: true
+        ))
+        lib.episodes["tv-100"] = [
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 5, name: "Woe's Hollow",
+                overview: nil, airDate: now.addingTimeInterval(600),
+                airTimestamp: now.addingTimeInterval(600), stillPath: nil
+            )
+        ]
+
+        XCTAssertTrue(
+            NotificationPlanner.plan(library: lib, now: now, calendar: calendar).isEmpty
+        )
     }
 
     func testEpisodeThatAlreadyAiredGetsNoCatchUp() {
@@ -209,6 +230,47 @@ final class NotificationPlannerTests: XCTestCase {
 
         XCTAssertTrue(
             NotificationPlanner.plan(library: lib, now: now, calendar: calendar).isEmpty
+        )
+    }
+
+    func testWakeCatchUpSpeaksForAnEpisodeThatStartedWhileAsleep() {
+        var lib = library(prefs: NotificationPreferences(
+            preAlertHours: nil, imminentAlertMinutes: 15, permissionRequested: true
+        ))
+        lib.episodes["tv-100"] = [
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 5, name: "Woe's Hollow",
+                overview: nil, airDate: now.addingTimeInterval(-20 * 60),
+                airTimestamp: now.addingTimeInterval(-20 * 60), stillPath: nil
+            )
+        ]
+
+        let plan = NotificationPlanner.plan(
+            library: lib, now: now, calendar: calendar, catchUpWindow: 1_800
+        )
+
+        XCTAssertEqual(plan.count, 1)
+        XCTAssertEqual(plan[0].id, "imminent-tv-100-100-s2e5")
+        XCTAssertTrue(plan[0].isCatchUp)
+        XCTAssertEqual(plan[0].body, "Started 20 minutes ago")
+    }
+
+    func testLateCatchUpRespectsItsWindow() {
+        var lib = library(prefs: NotificationPreferences(
+            preAlertHours: nil, imminentAlertMinutes: 15, permissionRequested: true
+        ))
+        lib.episodes["tv-100"] = [
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 5, name: "Woe's Hollow",
+                overview: nil, airDate: now.addingTimeInterval(-2 * 3_600),
+                airTimestamp: now.addingTimeInterval(-2 * 3_600), stillPath: nil
+            )
+        ]
+
+        XCTAssertTrue(
+            NotificationPlanner.plan(
+                library: lib, now: now, calendar: calendar, catchUpWindow: 1_800
+            ).isEmpty
         )
     }
 

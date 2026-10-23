@@ -85,12 +85,23 @@ struct NotificationScheduler {
     /// Reconciles the whole library at once. The previous implementation cancelled and
     /// re-added per title, so it could never see the global pending count; that let a long
     /// season push the soonest alerts past the system's 64-request cap.
-    func apply(library: Library, now: Date = .now, calendar: Calendar = .current) async {
-        await apply(plan: NotificationPlanner.plan(library: library, now: now, calendar: calendar))
+    ///
+    /// Safe to call often: a request whose ID, text and fire minute already match a pending
+    /// request is left untouched, so the minute-level reconciler does not churn the queue.
+    func apply(
+        library: Library,
+        now: Date = .now,
+        calendar: Calendar = .current,
+        catchUpWindow: TimeInterval = 0
+    ) async {
+        await apply(plan: NotificationPlanner.plan(
+            library: library, now: now, calendar: calendar, catchUpWindow: catchUpWindow
+        ))
     }
 
     func apply(plan: [PlannedAlert]) async {
         let pending = await client.pendingAlerts()
+        let pendingByID = Dictionary(pending.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let desired = Set(plan.map(\.id))
         let stale = pending.map(\.id).filter { Self.isManagedID($0) && !desired.contains($0) }
         if !stale.isEmpty {
@@ -103,8 +114,22 @@ struct NotificationScheduler {
             : []
         for alert in plan {
             if alert.isCatchUp && delivered.contains(alert.id) { continue }
+            // Catch-ups are one-shot interval triggers; leave them to fire.
+            if !alert.isCatchUp, let existing = pendingByID[alert.id], Self.matches(existing, alert) {
+                continue
+            }
             await addAlert(alert)
         }
+    }
+
+    /// True when the pending request already says exactly what the plan wants, at the same
+    /// minute. Text comparison keeps a content change (new episode title, new art) flowing.
+    private static func matches(_ pending: PendingAlert, _ alert: PlannedAlert) -> Bool {
+        guard pending.title == NotificationPlanner.sanitized(alert.title, limit: 120),
+              pending.body == NotificationPlanner.sanitized(alert.body, limit: 300),
+              let fireDate = pending.fireDate
+        else { return false }
+        return abs(fireDate.timeIntervalSince(alert.fireDate)) < 60
     }
 
     /// Kept for focused scheduler tests and any caller that only has one title in hand.
@@ -114,7 +139,8 @@ struct NotificationScheduler {
         episodes: [Episode] = [],
         movieReleases: [MovieRelease] = [],
         prefs: NotificationPreferences,
-        now: Date = .now
+        now: Date = .now,
+        catchUpWindow: TimeInterval = 0
     ) async {
         var library = Library()
         library.preferences = prefs
@@ -127,7 +153,9 @@ struct NotificationScheduler {
         ]
         if !episodes.isEmpty { library.episodes[title.id] = episodes }
         if !movieReleases.isEmpty { library.movieReleases[title.id] = movieReleases }
-        await apply(plan: NotificationPlanner.plan(library: library, now: now))
+        await apply(plan: NotificationPlanner.plan(
+            library: library, now: now, catchUpWindow: catchUpWindow
+        ))
     }
 
     func cancelAll(forTitle titleID: String, keys: [String]) {

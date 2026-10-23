@@ -29,6 +29,58 @@ final class AppStateBackgroundRefreshTests: XCTestCase {
         XCTAssertFalse(app.isBackgroundRefreshRunning())
     }
 
+    func testAlertReconcilerTicksWithoutNetwork() async throws {
+        let app = AppState(
+            store: LibraryStore(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)),
+            tmdb: StubTMDBClient(),
+            notifications: NotificationScheduler(client: MockNotificationClient())
+        )
+        app.startAlertReconciler(every: 0.05)
+        XCTAssertTrue(app.isAlertReconcilerRunning())
+        try await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertGreaterThanOrEqual(app.alertReconcileTicks, 2)
+        app.stopAlertReconciler()
+        XCTAssertFalse(app.isAlertReconcilerRunning())
+    }
+
+    /// A title with an episode airing within the horizon is refreshed on the spot, so a
+    /// late-announced air time is in place before its alert — without a manual refresh.
+    func testSoonAiringTitlesRefreshThemselvesOnce() async {
+        let stub = StubTMDBClient()
+        stub.tvDetailResult = TMDBTVDetail(
+            id: 100, name: "Severance", overview: nil, posterPath: nil, firstAirDate: nil,
+            status: "Returning Series",
+            seasons: [TMDBSeasonSummary(seasonNumber: 1, episodeCount: 0, airDate: nil)],
+            nextEpisodeToAir: nil
+        )
+        stub.seasons[1] = TMDBSeason(seasonNumber: 1, episodes: [])
+        let app = AppState(
+            store: LibraryStore(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)),
+            tmdb: stub
+        )
+        app.addToLibrary(Title(
+            tmdbID: 100, mediaType: .tv, name: "Severance", overview: "", posterPath: nil,
+            firstAirDate: nil, tvStatus: nil, seasons: [], lastRefreshed: nil
+        ))
+        let soon = gmtDate(2026, 10, 17, 8)
+        app.library.titles["tv-100"]?.lastRefreshed = gmtDate(2026, 10, 17, 5)
+        app.library.episodes["tv-100"] = [
+            Episode(
+                tmdbID: 100, seasonNumber: 1, episodeNumber: 1, name: "Pilot", overview: nil,
+                airDate: soon, airTimestamp: soon, stillPath: nil
+            )
+        ]
+
+        await app.refreshSoonAiringTitles(now: gmtDate(2026, 10, 17, 7))
+        XCTAssertEqual(stub.tvDetailCallCount, 1)
+
+        // Freshly refreshed data is not fetched again on the next heartbeat.
+        await app.refreshSoonAiringTitles(now: gmtDate(2026, 10, 17, 7, 10))
+        XCTAssertEqual(stub.tvDetailCallCount, 1)
+    }
+
     func testStartIgnoresSecondSchedule() throws {
         let app = makeSUT()
         app.startBackgroundRefresh(every: 0.05)

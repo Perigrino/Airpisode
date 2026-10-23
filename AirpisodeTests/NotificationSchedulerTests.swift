@@ -82,7 +82,9 @@ final class NotificationSchedulerTests: XCTestCase {
 
         var ep = episode(airDate: now.addingTimeInterval(86_400))  // date-only TMDB value
         ep.airTimestamp = exact
-        await scheduler.schedule(for: title(), episodes: [ep], prefs: prefs, now: now)
+        await scheduler.schedule(
+            for: title(), episodes: [ep], prefs: prefs, now: now, catchUpWindow: 1_800
+        )
 
         XCTAssertEqual(mock.addCalls.count, 2)
         XCTAssertEqual(triggerDate(of: mock.addCalls[0]), exact.addingTimeInterval(-24 * 3600))
@@ -157,7 +159,9 @@ final class NotificationSchedulerTests: XCTestCase {
         var ep = episode(airDate: now.addingTimeInterval(86_400))
         ep.airTimestamp = now.addingTimeInterval(600)
 
-        await scheduler.schedule(for: title(), episodes: [ep], prefs: prefs, now: now)
+        await scheduler.schedule(
+            for: title(), episodes: [ep], prefs: prefs, now: now, catchUpWindow: 1_800
+        )
 
         XCTAssertEqual(mock.addCalls.count, 1)
         XCTAssertEqual(mock.addCalls[0].identifier, "imminent-tv-100-100-s2e5")
@@ -177,7 +181,9 @@ final class NotificationSchedulerTests: XCTestCase {
         var ep = episode(airDate: now.addingTimeInterval(86_400))
         ep.airTimestamp = now.addingTimeInterval(600)
 
-        await scheduler.schedule(for: title(), episodes: [ep], prefs: prefs, now: now)
+        await scheduler.schedule(
+            for: title(), episodes: [ep], prefs: prefs, now: now, catchUpWindow: 1_800
+        )
 
         XCTAssertTrue(mock.addCalls.isEmpty)
     }
@@ -234,5 +240,56 @@ final class NotificationSchedulerTests: XCTestCase {
         XCTAssertEqual(mock.addCalls[0].content.title, "2 release changes")
         XCTAssertTrue(mock.addCalls[0].content.body.contains("Dune · Digital"))
         XCTAssertTrue(mock.addCalls[0].content.body.contains("Severance · S2E5"))
+    }
+
+    /// The minute-level reconciler runs often; an unchanged pending request must be left
+    /// alone so its trigger is not reset every minute.
+    func testReconcileLeavesMatchingPendingRequestAlone() async {
+        let mock = MockNotificationClient()
+        let scheduler = NotificationScheduler(client: mock)
+        let prefs = NotificationPreferences(
+            preAlertHours: 24, imminentAlertMinutes: nil, permissionRequested: true
+        )
+        let episodes = [episode(airDate: timedEpisodeDate)]
+
+        await scheduler.schedule(for: title(), episodes: episodes, prefs: prefs, now: now)
+        XCTAssertEqual(mock.addCalls.count, 1)
+
+        let request = mock.addCalls[0]
+        mock.pending = [PendingAlert(
+            id: request.identifier,
+            title: request.content.title,
+            body: request.content.body,
+            fireDate: triggerDate(of: request)
+        )]
+
+        await scheduler.schedule(for: title(), episodes: episodes, prefs: prefs, now: now)
+
+        XCTAssertEqual(mock.addCalls.count, 1, "unchanged request must not be re-added")
+        XCTAssertTrue(mock.removeCalls.isEmpty, "it is still desired, so it must not be removed")
+    }
+
+    /// A changed air time must replace the pending request rather than keep the old minute.
+    func testReconcileReplacesAChangedAirTime() async {
+        let mock = MockNotificationClient()
+        let scheduler = NotificationScheduler(client: mock)
+        let prefs = NotificationPreferences(
+            preAlertHours: 24, imminentAlertMinutes: nil, permissionRequested: true
+        )
+
+        await scheduler.schedule(for: title(), episodes: [episode(airDate: timedEpisodeDate)], prefs: prefs, now: now)
+        let request = mock.addCalls[0]
+        mock.pending = [PendingAlert(
+            id: request.identifier,
+            title: request.content.title,
+            body: request.content.body,
+            fireDate: triggerDate(of: request)
+        )]
+
+        let moved = timedEpisodeDate.addingTimeInterval(3 * 3_600)
+        await scheduler.schedule(for: title(), episodes: [episode(airDate: moved)], prefs: prefs, now: now)
+
+        XCTAssertEqual(mock.addCalls.count, 2)
+        XCTAssertEqual(triggerDate(of: mock.addCalls[1]), moved.addingTimeInterval(-24 * 3600))
     }
 }

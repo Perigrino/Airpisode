@@ -27,10 +27,15 @@ enum NotificationPlanner {
     static let digestCategory = "digestAlert"
     static let digestPrefix = "digest-"
 
+    /// `catchUpWindow` is non-zero only on a wake/launch pass. Such a pass may speak for an
+    /// episode whose lead time slipped by while the process was asleep or closed — both just
+    /// before and just after the start. Routine reconciles pass zero, so a banner the user
+    /// already dismissed is never resurrected a minute later.
     static func plan(
         library: Library,
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        catchUpWindow: TimeInterval = 0
     ) -> [PlannedAlert] {
         guard library.preferences.permissionRequested else { return [] }
 
@@ -46,9 +51,14 @@ enum NotificationPlanner {
             case .tv:
                 for episode in library.episodes[entry.id] ?? [] {
                     guard !library.watchedEpisodes.contains(episode.id),
-                          let airDate = airMoment(episode),
-                          airDate > now
+                          let airDate = airMoment(episode)
                     else { continue }
+                    // Future episodes are planned normally. A recently started one only
+                    // qualifies during a wake/launch catch-up pass.
+                    let justStarted = catchUpWindow > 0
+                        && airDate <= now
+                        && now.timeIntervalSince(airDate) <= catchUpWindow
+                    guard airDate > now || justStarted else { continue }
                     let key = episode.id
                     let episodeLabel = "S\(episode.seasonNumber)E\(episode.episodeNumber)"
                     let cleanName = sanitized(episode.name, limit: 80)
@@ -78,13 +88,33 @@ enum NotificationPlanner {
                                 posterPath: title.posterPath,
                                 userInfo: ["titleID": title.id, "key": key, "kind": "episode"]
                             )
-                        } else if remaining > 5 {
+                        } else if catchUpWindow > 0, remaining > 5 {
                             // Relaunching inside the lead window must not silently drop the
                             // reminder. Fire shortly after the app is ready instead.
                             let minutesLeft = max(1, Int(ceil(remaining / 60)))
                             let body = remaining < 60
                                 ? "Starting now"
                                 : "Starts in \(minutesLeft) minutes"
+                            alerts.append(PlannedAlert(
+                                id: "imminent-\(title.id)-\(key)",
+                                fireDate: now.addingTimeInterval(5),
+                                title: title.name,
+                                subtitle: "\(episodeLabel) · \(cleanName)",
+                                body: body,
+                                category: NotificationScheduler.episodeCategory,
+                                posterPath: title.posterPath,
+                                userInfo: ["titleID": title.id, "key": key, "kind": "episode"],
+                                isCatchUp: true
+                            ))
+                        } else if catchUpWindow > 0, remaining <= 0 {
+                            // The start slipped by while the app was asleep or closed. Speak once
+                            // on the next wake/launch, inside a short window, so a missed
+                            // premiere does not vanish silently.
+                            let elapsed = now.timeIntervalSince(airDate)
+                            guard elapsed <= catchUpWindow else { continue }
+                            let body = elapsed < 3_600
+                                ? "Started \(max(1, Int(elapsed / 60))) minutes ago"
+                                : "Aired at \(time(airDate, calendar: calendar))"
                             alerts.append(PlannedAlert(
                                 id: "imminent-\(title.id)-\(key)",
                                 fireDate: now.addingTimeInterval(5),

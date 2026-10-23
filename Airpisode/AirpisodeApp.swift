@@ -297,6 +297,9 @@ struct RootView: View {
             await appState.loadLibrary()
             // Keeps alerts fresh even after the window is closed (hourly passes).
             appState.startBackgroundRefresh()
+            // Minute-level reconcile: alerts are re-planned as their lead windows open, so a
+            // banner never waits for a manual refresh.
+            appState.startAlertReconciler()
             // Launch is the one time a full pass is expected without pressing Refresh.
             if Secrets.hasKey {
                 await appState.refreshOnLaunch()
