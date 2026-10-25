@@ -127,6 +127,11 @@ struct NotificationPreferences: Codable {
     var digestHour: Int = 9
     /// One batched banner when a refresh finds moved or newly announced releases.
     var notifyScheduleChanges: Bool = true
+    /// Alerts that would land between these hours are held until the window closes, so a
+    /// 3 AM air time cannot wake anyone. On by default.
+    var quietHoursEnabled: Bool = true
+    var quietHoursStart: Int = 23
+    var quietHoursEnd: Int = 7
 
     init(
         preAlertHours: Int? = 24,
@@ -134,7 +139,10 @@ struct NotificationPreferences: Codable {
         permissionRequested: Bool = false,
         digestEnabled: Bool = false,
         digestHour: Int = 9,
-        notifyScheduleChanges: Bool = true
+        notifyScheduleChanges: Bool = true,
+        quietHoursEnabled: Bool = true,
+        quietHoursStart: Int = 23,
+        quietHoursEnd: Int = 7
     ) {
         self.preAlertHours = preAlertHours
         self.imminentAlertMinutes = imminentAlertMinutes
@@ -142,11 +150,15 @@ struct NotificationPreferences: Codable {
         self.digestEnabled = digestEnabled
         self.digestHour = digestHour
         self.notifyScheduleChanges = notifyScheduleChanges
+        self.quietHoursEnabled = quietHoursEnabled
+        self.quietHoursStart = quietHoursStart
+        self.quietHoursEnd = quietHoursEnd
     }
 
     enum CodingKeys: String, CodingKey {
         case preAlertHours, imminentAlertMinutes, permissionRequested
         case digestEnabled, digestHour, notifyScheduleChanges
+        case quietHoursEnabled, quietHoursStart, quietHoursEnd
     }
 
     init(from decoder: Decoder) throws {
@@ -162,6 +174,9 @@ struct NotificationPreferences: Codable {
         digestEnabled = try c.decodeIfPresent(Bool.self, forKey: .digestEnabled) ?? false
         digestHour = try c.decodeIfPresent(Int.self, forKey: .digestHour) ?? 9
         notifyScheduleChanges = try c.decodeIfPresent(Bool.self, forKey: .notifyScheduleChanges) ?? true
+        quietHoursEnabled = try c.decodeIfPresent(Bool.self, forKey: .quietHoursEnabled) ?? true
+        quietHoursStart = try c.decodeIfPresent(Int.self, forKey: .quietHoursStart) ?? 23
+        quietHoursEnd = try c.decodeIfPresent(Int.self, forKey: .quietHoursEnd) ?? 7
     }
 }
 

@@ -5,6 +5,7 @@ import UserNotifications
 final class MockNotificationClient: NotificationClientProtocol, @unchecked Sendable {
     var addCalls: [UNNotificationRequest] = []
     var removeCalls: [[String]] = []
+    var removeDeliveredCalls: [[String]] = []
     var authResult = true
     var authStatus: UNAuthorizationStatus = .authorized
     var pending: [PendingAlert] = []
@@ -13,6 +14,7 @@ final class MockNotificationClient: NotificationClientProtocol, @unchecked Senda
     func requestAuthorization() async throws -> Bool { authResult }
     func add(_ request: UNNotificationRequest) async throws { addCalls.append(request) }
     func removePending(withIdentifiers ids: [String]) { removeCalls.append(ids) }
+    func removeDelivered(withIdentifiers ids: [String]) { removeDeliveredCalls.append(ids) }
     func authorizationStatus() async -> UNAuthorizationStatus { authStatus }
     func pendingAlerts() async -> [PendingAlert] { pending }
     func deliveredIDs() async -> Set<String> { delivered }
@@ -188,6 +190,34 @@ final class NotificationSchedulerTests: XCTestCase {
         XCTAssertTrue(mock.addCalls.isEmpty)
     }
 
+    func testAlertsStackPerShowAndTheImminentOneRetiresThePreAlert() async {
+        let mock = MockNotificationClient()
+        let scheduler = NotificationScheduler(client: mock)
+        let prefs = NotificationPreferences(
+            preAlertHours: 24, imminentAlertMinutes: 15, permissionRequested: true
+        )
+
+        await scheduler.schedule(
+            for: title(), episodes: [episode(airDate: timedEpisodeDate)], prefs: prefs, now: now
+        )
+
+        let preRequest = mock.addCalls.first { $0.identifier == "pre-tv-100-100-s2e5" }
+        let imminentRequest = mock.addCalls.first { $0.identifier == "imminent-tv-100-100-s2e5" }
+        XCTAssertNotNil(preRequest)
+        XCTAssertNotNil(imminentRequest)
+
+        // Both sit in the show's thread so the tray shows one stack, not two banners.
+        XCTAssertEqual(preRequest?.content.threadIdentifier, "tv-100")
+        XCTAssertEqual(imminentRequest?.content.threadIdentifier, "tv-100")
+        // Only the reminder that is about to happen may break through Focus.
+        XCTAssertEqual(preRequest?.content.interruptionLevel, .passive)
+        XCTAssertEqual(imminentRequest?.content.interruptionLevel, .timeSensitive)
+
+        // Once the imminent banner lands, the earlier "airs tomorrow" warning is stale.
+        XCTAssertEqual(mock.removeCalls, [["pre-tv-100-100-s2e5"]])
+        XCTAssertEqual(mock.removeDeliveredCalls, [["pre-tv-100-100-s2e5"]])
+    }
+
     private func record(
         titleName: String, label: String, kind: ScheduleChangeRecord.Kind,
         newDate: Date?, posterPath: String? = nil
@@ -260,7 +290,8 @@ final class NotificationSchedulerTests: XCTestCase {
             id: request.identifier,
             title: request.content.title,
             body: request.content.body,
-            fireDate: triggerDate(of: request)
+            fireDate: triggerDate(of: request),
+            threadID: request.content.threadIdentifier
         )]
 
         await scheduler.schedule(for: title(), episodes: episodes, prefs: prefs, now: now)
@@ -283,7 +314,8 @@ final class NotificationSchedulerTests: XCTestCase {
             id: request.identifier,
             title: request.content.title,
             body: request.content.body,
-            fireDate: triggerDate(of: request)
+            fireDate: triggerDate(of: request),
+            threadID: request.content.threadIdentifier
         )]
 
         let moved = timedEpisodeDate.addingTimeInterval(3 * 3_600)

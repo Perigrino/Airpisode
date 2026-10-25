@@ -39,5 +39,23 @@ final class LibraryMigrationTests: XCTestCase {
         XCTAssertEqual(prefs.preAlertHours, 24)
         XCTAssertEqual(prefs.imminentAlertMinutes, 15)
         XCTAssertFalse(prefs.digestEnabled)
+        // Quiet hours protect sleep out of the box; existing libraries adopt the default.
+        XCTAssertTrue(prefs.quietHoursEnabled)
+        XCTAssertEqual(prefs.quietHoursStart, 23)
+        XCTAssertEqual(prefs.quietHoursEnd, 7)
+    }
+
+    func testQuietHoursSurviveARoundTrip() throws {
+        var prefs = NotificationPreferences()
+        prefs.quietHoursEnabled = false
+        prefs.quietHoursStart = 22
+        prefs.quietHoursEnd = 6
+
+        let data = try JSONEncoder().encode(prefs)
+        let decoded = try JSONDecoder().decode(NotificationPreferences.self, from: data)
+
+        XCTAssertFalse(decoded.quietHoursEnabled)
+        XCTAssertEqual(decoded.quietHoursStart, 22)
+        XCTAssertEqual(decoded.quietHoursEnd, 6)
     }
 }

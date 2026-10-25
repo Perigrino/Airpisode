@@ -68,6 +68,28 @@ struct SettingsView: View {
                     set: { on in appState.updateNotificationPreferences { $0.notifyScheduleChanges = on } }
                 ))
 
+                Toggle("Quiet hours", isOn: Binding(
+                    get: { prefs.quietHoursEnabled },
+                    set: { on in appState.updateNotificationPreferences { $0.quietHoursEnabled = on } }
+                ))
+                if prefs.quietHoursEnabled {
+                    Picker("From", selection: Binding(
+                        get: { prefs.quietHoursStart },
+                        set: { hour in appState.updateNotificationPreferences { $0.quietHoursStart = hour } }
+                    )) {
+                        ForEach(0..<24, id: \.self) { Text(Self.hourLabel($0)).tag($0) }
+                    }
+                    Picker("Until", selection: Binding(
+                        get: { prefs.quietHoursEnd },
+                        set: { hour in appState.updateNotificationPreferences { $0.quietHoursEnd = hour } }
+                    )) {
+                        ForEach(0..<24, id: \.self) { Text(Self.hourLabel($0)).tag($0) }
+                    }
+                    Text("Alerts that would arrive inside this window wait until it closes.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Text("Airpisode looks up episode air times from TVmaze. Releases with a confirmed time get timed alerts; date-only releases are shown without a clock time and get no time-based alert. Use a show's context menu to override the global lead time.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -94,5 +116,17 @@ struct SettingsView: View {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             permissionDenied = prefs.permissionRequested && settings.authorizationStatus == .denied
         }
+    }
+
+    private static func hourLabel(_ hour: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateFormat = DateFormatter.dateFormat(
+            fromTemplate: "j", options: 0, locale: .current
+        ) ?? "HH"
+        var components = DateComponents()
+        components.hour = hour
+        let date = Calendar.current.date(from: components) ?? Date()
+        return formatter.string(from: date)
     }
 }

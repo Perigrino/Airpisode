@@ -151,11 +151,85 @@ final class NotificationPlannerTests: XCTestCase {
         let digest = plan.first { $0.id.hasPrefix(NotificationPlanner.digestPrefix) }
 
         XCTAssertNotNil(digest)
+        // The title names the real span, not a calendar day that may not match its contents.
+        XCTAssertEqual(digest?.title, "Next 24 hours")
         // The soonest show fronts the banner; art is carried again like the other alerts.
         XCTAssertEqual(digest?.posterPath, "/severance.jpg")
-        XCTAssertTrue(digest?.body.contains("Severance · S2E5 · 20:00") ?? false)
+        let airText = NotificationPlanner.time(
+            now.addingTimeInterval(32 * 3600), calendar: calendar
+        )
+        XCTAssertTrue(digest?.body.contains("Severance · S2E5 · \(airText)") ?? false)
         XCTAssertTrue(digest?.body.contains("Dune · Digital") ?? false)
         XCTAssertFalse(digest?.body.contains("12:00") ?? true)
+    }
+
+    func testDigestMarksLinesThatFallOnTheNextDay() {
+        var lib = library()
+        lib.preferences.preAlertHours = nil
+        lib.preferences.digestEnabled = true
+        lib.preferences.digestHour = 9
+        lib.episodes["tv-100"] = [
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 5, name: "Woe's Hollow",
+                overview: nil, airDate: nil,
+                // 38 hours out (02:00 the day after tomorrow): the window opens tomorrow
+                // at 09:00, so this line falls on the next calendar day.
+                airTimestamp: now.addingTimeInterval(38 * 3600), stillPath: nil
+            )
+        ]
+
+        let plan = NotificationPlanner.plan(library: lib, now: now, calendar: calendar)
+        let digest = plan.first { $0.id == "digest-2026-10-17" }
+
+        XCTAssertNotNil(digest)
+        XCTAssertTrue(digest?.body.contains("Severance · S2E5 · Tomorrow") ?? false)
+    }
+
+    func testDigestSuppressesTheMatchingPreAlert() {
+        var lib = library()
+        lib.preferences.preAlertHours = 24
+        lib.preferences.digestEnabled = true
+        lib.preferences.digestHour = 9
+        lib.episodes["tv-100"] = [
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 5, name: "Woe's Hollow",
+                overview: nil, airDate: nil,
+                airTimestamp: now.addingTimeInterval(32 * 3600), stillPath: nil
+            )
+        ]
+
+        let plan = NotificationPlanner.plan(library: lib, now: now, calendar: calendar)
+
+        // The digest already announces this release within the same day; a second banner
+        // saying "Airs tomorrow at ..." would be noise.
+        XCTAssertFalse(plan.contains { $0.id.hasPrefix("pre-") })
+        XCTAssertTrue(plan.contains { $0.id.hasPrefix(NotificationPlanner.digestPrefix) })
+    }
+
+    func testQuietHoursDeferANightAlertToMorning() {
+        var lib = library(prefs: NotificationPreferences(
+            preAlertHours: nil, imminentAlertMinutes: 15, permissionRequested: true
+        ))
+        // 03:59 GMT tomorrow: inside the default 23:00–07:00 window.
+        let airDate = now.addingTimeInterval(16 * 3600 - 60)
+        lib.episodes["tv-100"] = [
+            Episode(
+                tmdbID: 100, seasonNumber: 2, episodeNumber: 5, name: "Woe's Hollow",
+                overview: nil, airDate: nil, airTimestamp: airDate, stillPath: nil
+            )
+        ]
+
+        let plan = NotificationPlanner.plan(library: lib, now: now, calendar: calendar)
+
+        XCTAssertEqual(plan.count, 1)
+        let alert = plan[0]
+        XCTAssertEqual(calendar.component(.hour, from: alert.fireDate), 7)
+        XCTAssertEqual(calendar.component(.day, from: alert.fireDate), 17)
+        // The show already aired by the time the window closes, and the copy says so
+        // instead of delivering a stale "Starts in 15 minutes".
+        XCTAssertTrue(alert.body.hasPrefix("Aired at "))
+        XCTAssertFalse(alert.isCatchUp)
+        XCTAssertTrue(alert.isUrgent)
     }
 
     func testCapKeepsTheSoonestSixtyAlerts() {

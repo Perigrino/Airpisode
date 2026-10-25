@@ -7,12 +7,14 @@ struct PendingAlert: Identifiable, Equatable {
     let title: String
     let body: String
     let fireDate: Date?
+    var threadID: String? = nil
 }
 
 protocol NotificationClientProtocol: Sendable {
     func requestAuthorization() async throws -> Bool
     func add(_ request: UNNotificationRequest) async throws
     func removePending(withIdentifiers ids: [String])
+    func removeDelivered(withIdentifiers ids: [String])
     func authorizationStatus() async -> UNAuthorizationStatus
     func pendingAlerts() async -> [PendingAlert]
     func deliveredIDs() async -> Set<String>
@@ -29,6 +31,10 @@ struct SystemNotificationClient: NotificationClientProtocol {
 
     func removePending(withIdentifiers ids: [String]) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
+    func removeDelivered(withIdentifiers ids: [String]) {
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
     }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
@@ -56,7 +62,8 @@ struct SystemNotificationClient: NotificationClientProtocol {
                         id: request.identifier,
                         title: request.content.title,
                         body: request.content.body,
-                        fireDate: fireDate
+                        fireDate: fireDate,
+                        threadID: request.content.threadIdentifier
                     )
                 })
             }
@@ -119,6 +126,12 @@ struct NotificationScheduler {
                 continue
             }
             await addAlert(alert)
+            // The imminent reminder replaces the earlier warning in the tray; the user
+            // should see one card per show, not a pile of stale ones.
+            if !alert.retiresIDs.isEmpty {
+                client.removePending(withIdentifiers: alert.retiresIDs)
+                client.removeDelivered(withIdentifiers: alert.retiresIDs)
+            }
         }
     }
 
@@ -127,6 +140,7 @@ struct NotificationScheduler {
     private static func matches(_ pending: PendingAlert, _ alert: PlannedAlert) -> Bool {
         guard pending.title == NotificationPlanner.sanitized(alert.title, limit: 120),
               pending.body == NotificationPlanner.sanitized(alert.body, limit: 300),
+              pending.threadID == alert.threadID,
               let fireDate = pending.fireDate
         else { return false }
         return abs(fireDate.timeIntervalSince(alert.fireDate)) < 60
@@ -276,6 +290,13 @@ struct NotificationScheduler {
         content.body = NotificationPlanner.sanitized(alert.body, limit: 300)
         content.categoryIdentifier = alert.category
         content.userInfo = alert.userInfo
+        // Every alert from one show shares a thread, so the tray stacks them instead of
+        // showing three separate cards for the same episode.
+        if let thread = alert.threadID {
+            content.threadIdentifier = thread
+        }
+        // Imminent reminders can break through Focus; summaries and warnings stay passive.
+        content.interruptionLevel = alert.isUrgent ? .timeSensitive : .passive
         if let posterPath = alert.posterPath {
             await attachPoster(path: posterPath, to: content)
         }
