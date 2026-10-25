@@ -114,6 +114,21 @@ final class LibraryHistoryTests: XCTestCase {
         XCTAssertFalse(lib.migrateLegacyWatchedState(), "migration is idempotent")
     }
 
+    func testReleasedUnwatchedEpisodesUseTheExactAirTimeNotTheNoonSentinel() {
+        // GET JIRO-shaped data: TMDB stores date-only "2026-10-25" as 12:00 UTC, but the
+        // episode actually aired at 03:59 UTC. At 10:54 UTC it must already be history.
+        var lib = makeLibrary()
+        var aired = episode(1, 5, airDate: TMDBMapper.parseDate("2026-10-25")!)
+        aired.airTimestamp = TMDBMapper.parseDateTime("2026-10-25T03:59:00Z")!
+        lib.episodes["tv-100"] = [aired]
+
+        let released = lib.releasedUnwatchedEpisodes(now: TMDBMapper.parseDateTime("2026-10-25T10:54:49Z")!)
+
+        XCTAssertEqual(released.map(\.id), [aired.id])
+        XCTAssertEqual(released.first?.date, aired.airTimestamp,
+                       "History sorts and labels by the moment it really aired")
+    }
+
     func testReleasedUnwatchedEpisodesSkipsEpisodesFromBeforeTheShowWasAdded() {
         var lib = makeLibrary()
         let beforeAdd = episode(1, 1, airDate: days(-40))  // aired before the show was tracked

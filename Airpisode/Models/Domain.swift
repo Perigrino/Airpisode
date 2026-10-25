@@ -42,6 +42,11 @@ struct Episode: Codable, Identifiable, Hashable {
     /// TMDB value, used for display and release diffing.
     var airTimestamp: Date? = nil
     var stillPath: String?
+
+    /// The best available moment this episode aired: the exact broadcast instant when
+    /// TVmaze gave us one, otherwise TMDB's date-only value. Use this instead of
+    /// `airDate` when deciding whether something has already aired.
+    var airMoment: Date? { airTimestamp ?? airDate }
 }
 
 struct MovieRelease: Codable, Identifiable, Hashable {

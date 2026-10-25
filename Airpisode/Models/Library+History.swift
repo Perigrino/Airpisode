@@ -8,7 +8,7 @@ struct ReleasedEpisode: Identifiable {
     let title: Title
     let episode: Episode
     var id: String { episode.id }
-    var date: Date? { episode.airDate }
+    var date: Date? { episode.airMoment }
     var label: String { "S\(episode.seasonNumber)E\(episode.episodeNumber) · \(episode.name)" }
 }
 
@@ -32,7 +32,10 @@ extension Library {
                 guard let title = titles[entry.id] else { return [] }
                 return (episodes[entry.id] ?? [])
                     .filter { episode in
-                        guard let airDate = episode.airDate, airDate <= now else { return false }
+                        // `airDate` alone is TMDB's date-only noon-UTC sentinel, so an
+                        // episode that aired at 03:59 would stay hidden until noon. The
+                        // exact TVmaze time (when known) is what listeners experienced.
+                        guard let airDate = episode.airMoment, airDate <= now else { return false }
                         guard airDate >= entry.addedAt else { return false }
                         return !watchedEpisodes.contains(episode.id)
                     }
