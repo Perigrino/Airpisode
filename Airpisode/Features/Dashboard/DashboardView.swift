@@ -2,47 +2,46 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var justUpdated = false
 
     private var items: [UpcomingItem] { appState.library.upcomingReleases() }
+    private var airedEpisodes: [ReleasedEpisode] { appState.library.releasedUnwatchedEpisodes() }
+    private var airedMovies: [ReleasedMovie] { appState.library.releasedUnwatchedMovies() }
 
-/// "Date-only items with no known date floor in the Later bucket" is preserved from Upcoming;
-/// these three stay exactly as before.
+    private var today: [UpcomingItem] {
+        items.filter {
+            guard let date = $0.date else { return false }
+            return date < Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400)
+        }
+    }
 
-    private var today: [UpcomingItem] { items.filter { ($0.date ?? .distantPast) < Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400) && $0.date != nil } }
-    private var thisWeek: [UpcomingItem] { items.filter { item in
-        guard let date = item.date else { return false }
-        let start = Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400)
-        return date >= start && date < start.addingTimeInterval(6 * 86_400)
-    } }
-    private var later: [UpcomingItem] { items.filter { item in
-        guard let date = item.date else { return true }
-        let start = Calendar.current.startOfDay(for: .now).addingTimeInterval(7 * 86_400)
-        return date >= start
-    } }
+    private var thisWeek: [UpcomingItem] {
+        items.filter { item in
+            guard let date = item.date else { return false }
+            let start = Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400)
+            return date >= start && date < start.addingTimeInterval(6 * 86_400)
+        }
+    }
+
+    private var later: [UpcomingItem] {
+        items.filter { item in
+            guard let date = item.date else { return true }
+            let start = Calendar.current.startOfDay(for: .now).addingTimeInterval(7 * 86_400)
+            return date >= start
+        }
+    }
+
+    private var isEmpty: Bool {
+        items.isEmpty && airedEpisodes.isEmpty && airedMovies.isEmpty
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if let error = appState.lastRefreshError {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.12)))
-                        .appear()
-                }
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                header
 
-                HStack(alignment: .firstTextBaseline) {
-                    PageHeader(title: "To Watch",
-                               subtitle: "What's coming up — and what already aired and is waiting for you")
-                    Spacer()
-                    if justUpdated {
-                        Label("Updated just now", systemImage: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(Theme.accent)
-                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                if let error = appState.lastRefreshError {
+                    InlineBanner(message: error, tone: .warning, actionTitle: "Try Again") {
+                        Task { await appState.runFullRefresh() }
                     }
                 }
 
@@ -50,93 +49,98 @@ struct DashboardView: View {
                     ScheduleChangesCard(records: appState.unreadScheduleChanges)
                 }
 
-                if items.isEmpty
-                    && appState.library.releasedUnwatchedEpisodes().isEmpty
-                    && appState.library.releasedUnwatchedMovies().isEmpty {
-                    emptyState
+                if isEmpty {
+                    EmptyState(
+                        systemImage: "checklist",
+                        title: "Nothing to watch yet",
+                        message: "Track a show or movie and its next release appears here, with what is already waiting for you.",
+                        actionTitle: "Find something to track"
+                    ) {
+                        appState.selectedSection = .discover
+                    }
                 } else {
-                    // Aired-but-unwatched first (checkbox clears them), then what's still ahead.
-                    HistorySection(
-                        items: appState.library.releasedUnwatchedEpisodes(),
-                        heading: "Episodes",
-                        onMarkWatched: { item in
-                            appState.setEpisodeWatched(true, episode: item.episode, titleID: item.title.id)
-                        }
-                    )
-                    HistorySection(
-                        items: appState.library.releasedUnwatchedMovies(),
-                        heading: "Movies",
-                        onMarkWatched: { item in
-                            appState.setMovieWatched(true, titleID: item.title.id)
-                        }
-                    )
+                    // Waiting first: it is the only part that asks for an action.
+                    if !airedEpisodes.isEmpty || !airedMovies.isEmpty {
+                        HistorySection(
+                            items: airedEpisodes,
+                            heading: "Episodes waiting",
+                            onMarkWatched: { item in
+                                appState.setEpisodeWatched(true, episode: item.episode, titleID: item.title.id)
+                            }
+                        )
+                        HistorySection(
+                            items: airedMovies,
+                            heading: "Movies waiting",
+                            onMarkWatched: { item in
+                                appState.setMovieWatched(true, titleID: item.title.id)
+                            }
+                        )
+                    }
+
                     section("Today", today)
                     section("This Week", thisWeek)
                     section("Later", later)
                 }
             }
-            .padding(24)
-            .padding(.bottom, DockBar.contentInset)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(Motion.smooth, value: justUpdated)
+            .padding(Theme.Space.xl)
+            .frame(maxWidth: 900)
+            .frame(maxWidth: .infinity)
+            .animation(Motion.smooth, value: appState.unreadScheduleChanges.count)
         }
-        .scrollIndicators(.hidden)
         .screenBackground()
-        .navigationTitle("To Watch")
         .toolbar {
-            Button {
-                Task {
-                    await appState.runFullRefresh()
-                    justUpdated = true
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
-                    justUpdated = false
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await appState.runFullRefresh() }
+                } label: {
+                    if appState.isRefreshing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
                 }
-            } label: {
-                if appState.isRefreshing {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
+                .disabled(appState.isRefreshing)
+                .help("Refresh release dates (⌘R)")
             }
-            .disabled(appState.isRefreshing)
-            .help("Refresh release dates")
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "checklist")
-                .font(.system(size: 40))
-                .foregroundStyle(.tertiary)
-            Text("Nothing to watch yet")
-                .font(.headline)
-            Text("Track a show or movie and its next release shows up here.")
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Next up")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Text(DateText.freshness(appState.lastRefreshAt))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            Text(summary)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Button {
-                appState.selectedSection = .discover
-            } label: {
-                Label("Find something to track", systemImage: "magnifyingglass")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
-            .padding(.top, 4)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-        .appear()
+    }
+
+    private var summary: String {
+        let waiting = airedEpisodes.count + airedMovies.count
+        let ahead = today.count + thisWeek.count
+        switch (waiting, ahead) {
+        case (0, 0): return "Nothing scheduled. Add a show or movie to follow its releases."
+        case (0, _): return "\(ahead) release\(ahead == 1 ? "" : "s") in the next seven days."
+        case (_, 0): return "\(waiting) item\(waiting == 1 ? "" : "s") already aired and waiting for you."
+        default: return "\(waiting) waiting · \(ahead) in the next seven days."
+        }
     }
 
     @ViewBuilder
     private func section(_ name: String, _ items: [UpcomingItem]) -> some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(name)
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                ForEach(items) { item in
-                    DashboardRowView(item: item)
-                        .hoverLift()
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                SectionHeader(title: name, count: items.count)
+                VStack(spacing: Theme.Space.s) {
+                    ForEach(items) { item in
+                        DashboardRowView(item: item)
+                    }
                 }
             }
         }

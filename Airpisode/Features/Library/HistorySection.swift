@@ -12,7 +12,7 @@ extension ReleasedMovie: HistoryItem {}
 
 /// "Released · not watched yet" — rows stay here until they're marked watched, then they're gone.
 ///
-/// Shared by My Shows (episodes) and My Movies (movies). Hides itself when empty.
+/// Shared by To Watch, and reusable by any list of aired items. Hides itself when empty.
 struct HistorySection<Item: HistoryItem>: View {
     let items: [Item]
     var heading = "Aired"
@@ -28,74 +28,68 @@ struct HistorySection<Item: HistoryItem>: View {
 
     var body: some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                header
-                ForEach(Bucket.allCases) { bucket in
-                    let bucketItems = items.filter { self.bucket(for: $0) == bucket }
-                    if !bucketItems.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(bucket.rawValue)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                            ForEach(bucketItems) { item in
-                                row(item)
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                    Text(heading)
+                        .font(.headline)
+                    Text("\(items.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Text("Aired · not watched")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    ForEach(Bucket.allCases) { bucket in
+                        let bucketItems = items.filter { self.bucket(for: $0) == bucket }
+                        if !bucketItems.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(bucket.rawValue)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .textCase(.uppercase)
+                                    .padding(.bottom, 2)
+                                ForEach(bucketItems) { item in
+                                    row(item)
+                                }
                             }
                         }
                     }
                 }
             }
-            .padding(16)
+            .padding(Theme.Space.l)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(PosterTintedCard(posterPath: nil))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-    }
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(heading)
-                .font(.title3)
-                .fontWeight(.semibold)
-            Text("Released · not watched yet")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            Text("\(items.count)")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+            .background(Theme.cardBackground())
+            .accessibilityElement(children: .contain)
         }
     }
 
     private func row(_ item: Item) -> some View {
-        HStack(spacing: 12) {
-            PosterImage(path: item.title.posterPath, width: 40, height: 60, cornerRadius: 6)
+        HStack(spacing: Theme.Space.m) {
+            PosterImage(path: item.title.posterPath, width: 34, height: 50, cornerRadius: 5)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.subheadline.weight(.medium))
                     .lineLimit(1)
                 Text(item.label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.Space.s)
             Text(dateText(item.date))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Button {
+            Button("Mark watched") {
                 withAnimation(Motion.smooth) { onMarkWatched(item) }
-            } label: {
-                Image(systemName: "checkmark.circle")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Theme.accent)
             }
-            .buttonStyle(.plain)
-            .help("Mark as watched")
+            .controlSize(.small)
+            .help("Mark \(item.title.name) as watched")
+            .accessibilityLabel("Mark \(item.title.name) as watched")
         }
-        .padding(.vertical, 2)
-        .hoverLift()
+        .padding(.vertical, 3)
     }
 
     private func bucket(for item: Item) -> Bucket {
@@ -108,6 +102,6 @@ struct HistorySection<Item: HistoryItem>: View {
 
     private func dateText(_ date: Date?) -> String {
         guard let date else { return "TBD" }
-        return EpisodeRowView.dayFormatter.string(from: date)
+        return DateText.airing(date)
     }
 }

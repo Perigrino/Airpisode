@@ -21,15 +21,10 @@ xcodebuild -project "$APP_NAME.xcodeproj" -scheme "$APP_NAME" \
 APP="$BUILD/Build/Products/Release/$APP_NAME.app"
 [ -d "$APP" ] || { echo "Build product not found at $APP" >&2; exit 1; }
 
-# Notification banners ask for sizes the asset catalog may leave out of the compiled .icns.
-# Rebuild it from the full source set so every rep the system can request exists, then
-# re-sign because touching bundle contents invalidates the ad-hoc signature.
-ICONSET="$(mktemp -d)/AppIcon.iconset"
-mkdir -p "$ICONSET"
-cp "$ROOT/Airpisode/Resources/Assets.xcassets/AppIcon.appiconset/"*.png "$ICONSET/"
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+# The icon ships as an Icon Composer file (Airpisode/Icon/AppIcon.icon); Xcode 26
+# compiles it into Assets.car + AppIcon.icns, so every rep the system can request
+# already exists. Re-sign because touching bundle contents invalidates the ad-hoc sig.
 codesign --force --sign - "$APP"
-rm -rf "$(dirname "$ICONSET")"
 
 rm -rf "$DIST"
 mkdir -p "$DIST"

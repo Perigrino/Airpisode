@@ -62,7 +62,13 @@ enum TMDBMapper {
             let date: Date?
             let hasTime: Bool
             if let dt = parseDateTime(entry.releaseDate) {
-                date = dt; hasTime = true
+                // TMDB often sends a date-only release as "…T00:00:00.000Z". Midnight is
+                // not an announced showtime, so treat it as a plain date (and display no time).
+                let parts = Calendar(identifier: .gregorian)
+                    .dateComponents(in: TimeZone(identifier: "UTC")!, from: dt)
+                let isDateOnly = parts.hour == 0 && parts.minute == 0 && parts.second == 0
+                date = isDateOnly ? (parseDate(String(entry.releaseDate.prefix(10))) ?? dt) : dt
+                hasTime = !isDateOnly
             } else if let d = parseDate(entry.releaseDate) {
                 date = d; hasTime = false
             } else {

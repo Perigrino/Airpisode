@@ -29,23 +29,7 @@ private struct AppearModifier: ViewModifier {
     }
 }
 
-/// Subtle hover lift for clickable cards/rows (desktop affordance).
-private struct HoverLiftModifier: ViewModifier {
-    @State private var hovering = false
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(hovering ? 1.006 : 1)
-            .shadow(color: .black.opacity(hovering ? 0.35 : 0), radius: 14, y: 6)
-            .animation(Motion.smooth, value: hovering)
-            .onHover { hovering = $0 }
-    }
-}
-
 extension View {
     /// Fade + rise on first appearance (transient states, not payload rows).
     func appear() -> some View { modifier(AppearModifier()) }
-
-    /// Gentle scale + shadow on hover for clickable cards.
-    func hoverLift() -> some View { modifier(HoverLiftModifier()) }
 }

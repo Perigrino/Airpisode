@@ -6,6 +6,26 @@ enum MediaType: String, Codable {
 
 enum ReleaseKind: String, Codable {
     case theatrical, digital, physical, tv
+
+    /// Short label used in lists: "Digital", "TV".
+    var label: String {
+        switch self {
+        case .theatrical: return "Theatrical"
+        case .digital: return "Digital"
+        case .physical: return "Physical"
+        case .tv: return "TV"
+        }
+    }
+
+    /// Reads naturally in front of a date: "In cinemas · 1 Dec".
+    var upcomingLabel: String {
+        switch self {
+        case .theatrical: return "In cinemas"
+        case .digital: return "On demand"
+        case .physical: return "On disc"
+        case .tv: return "On TV"
+        }
+    }
 }
 
 struct SeasonSummary: Codable, Hashable {

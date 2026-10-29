@@ -23,8 +23,16 @@ enum Secrets {
 final class AppState: ObservableObject {
     @Published var library = Library()
     @Published var lastRefreshError: String?
+    @Published var storageError: String?
+    @Published var libraryNotice: String?
     @Published var isRefreshing = false
     @Published var selectedSection: AppSection? = .dashboard
+    /// When the last successful fetch touched the library. Survives relaunch.
+    @Published var lastRefreshAt: Date?
+
+    private static let lastRefreshKey = "lastSuccessfulRefreshAt"
+    /// Newest write wins, even when save tasks complete out of order.
+    private var saveSequence: UInt64 = 0
 
     let tmdb: TMDBClientProtocol
     let notifications: NotificationScheduler
@@ -41,6 +49,7 @@ final class AppState: ObservableObject {
         self.tmdb = tmdb
         self.notifications = notifications
         self.airTimes = airTimes
+        self.lastRefreshAt = UserDefaults.standard.object(forKey: Self.lastRefreshKey) as? Date
         // The UN delegate is a singleton slot: install this state so banner action taps
         // (Mark watched / Mute) reach the library mutations.
         AppDelegate.actionHandler = self
@@ -147,7 +156,15 @@ final class AppState: ObservableObject {
     }
 
     func loadLibrary() async {
-        library = await store.load()
+        let report = await store.loadReport()
+        library = report.library
+        if let warning = report.warning {
+            libraryNotice = warning
+        }
+        if lastRefreshAt == nil {
+            let newest = library.titles.values.compactMap(\.lastRefreshed).max()
+            lastRefreshAt = newest
+        }
         // Move legacy show-level watches first, then backfill the diary from the final sets.
         let migratedWatched = library.migrateLegacyWatchedState()
         let migratedSchema = library.migrateSchemaIfNeeded()
@@ -359,15 +376,18 @@ final class AppState: ObservableObject {
         let changes = await engine.refreshIfNeeded(library: &snapshot, now: .now, force: force)
         library = snapshot
         recordScheduleChanges(changes, previouslyRefreshed: previouslyRefreshed)
-        try? await store.save(library)
+        await saveNow()
         // A title still carrying a pre-sweep `lastRefreshed` was not re-fetched (offline pass).
         // Titles without loaded data are ignored so a data-less entry can never block forever.
         let failed = snapshot.entries.filter { entry in
             guard let title = snapshot.titles[entry.id] else { return false }
             return (title.lastRefreshed ?? .distantPast) < started
         }.count
+        if failed < snapshot.entries.count, !snapshot.entries.isEmpty {
+            markRefreshed(at: Date())
+        }
         lastRefreshError = failed > 0
-            ? "Couldn't refresh \(failed) title\(failed == 1 ? "" : "s"). Will retry automatically."
+            ? "Couldn't refresh \(failed) title\(failed == 1 ? "" : "s"). Check your connection and try again."
             : nil
         rescheduleAll()
 
@@ -432,7 +452,8 @@ final class AppState: ObservableObject {
                 previouslyRefreshed: hadRefreshed ? [titleID] : []
             )
             lastRefreshError = nil
-            try? await store.save(library)
+            await saveNow()
+            markRefreshed(at: now)
             rescheduleAll()
         } catch {
             lastRefreshError = "Couldn't refresh \(library.titles[titleID]?.name ?? titleID): \(error.localizedDescription)"
@@ -599,9 +620,46 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func markRefreshed(at date: Date) {
+        lastRefreshAt = date
+        UserDefaults.standard.set(date, forKey: Self.lastRefreshKey)
+    }
+
+    func dismissLibraryNotice() {
+        libraryNotice = nil
+    }
+
+    func dismissStorageError() {
+        storageError = nil
+    }
+
+    /// Fire-and-forget for UI mutations: the snapshot and its sequence are captured at the
+    /// call site, so a later mutation always wins even if this task starts last.
     private func save() {
+        saveSequence &+= 1
+        let sequence = saveSequence
         let snapshot = library
-        Task { try? await store.save(snapshot) }
+        Task { await write(snapshot, sequence: sequence) }
+    }
+
+    /// Awaited save for refresh paths that tests and callers expect to be durable on return.
+    private func saveNow() async {
+        saveSequence &+= 1
+        let sequence = saveSequence
+        await write(library, sequence: sequence)
+    }
+
+    private func write(_ snapshot: Library, sequence: UInt64) async {
+        do {
+            try await store.save(snapshot, sequence: sequence)
+            if sequence == saveSequence {
+                storageError = nil
+            }
+        } catch {
+            // A stale failure must not overwrite the status of a newer successful write.
+            guard sequence == saveSequence else { return }
+            storageError = "Couldn't save your library: \(error.localizedDescription)"
+        }
     }
 }
 

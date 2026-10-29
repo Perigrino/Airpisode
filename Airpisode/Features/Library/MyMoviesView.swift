@@ -3,51 +3,135 @@ import SwiftUI
 struct MyMoviesView: View {
     @EnvironmentObject private var appState: AppState
     @State private var expandedID: String?
+    @State private var pendingRemoval: Title?
+    @SceneStorage("movies.search") private var searchText = ""
+    @AppStorage("movies.filter") private var filterRaw = Library.MovieFilter.all.rawValue
+    @AppStorage("movies.sort") private var sortRaw = Library.LibrarySort.name.rawValue
+
+    private var filter: Library.MovieFilter {
+        Library.MovieFilter(rawValue: filterRaw) ?? .all
+    }
+
+    private var sort: Library.LibrarySort {
+        Library.LibrarySort(rawValue: sortRaw) ?? .name
+    }
+
+    private var trackedCount: Int {
+        appState.library.entries.filter { $0.mediaType == .movie }.count
+    }
 
     private var movies: [Title] {
         appState.library.orderedWithPinnedFirst(
-            appState.library.entries
-                .filter { $0.mediaType == .movie }
-                .compactMap { appState.library.titles[$0.id] }
-                .sorted { $0.name < $1.name }
+            appState.library.queryMovies(searchText: searchText, filter: filter, sort: sort)
         )
     }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 12) {
-                    PageHeader(title: "My Movies",
-                               subtitle: subtitle(trackedCount: movies.count))
-                    if movies.isEmpty {
-                        emptyState
+                LazyVStack(spacing: Theme.Space.s) {
+                    if trackedCount == 0 {
+                        EmptyState(
+                            systemImage: "film",
+                            title: "No movies yet",
+                            message: "Track a movie and every release date — theaters, digital, physical — appears in To Watch.",
+                            actionTitle: "Find movies"
+                        ) {
+                            appState.selectedSection = .discover
+                        }
+                    } else if movies.isEmpty {
+                        EmptyState(
+                            systemImage: "line.3.horizontal.decrease.circle",
+                            title: "No movies match",
+                            message: "Try a different search, or show everything again.",
+                            actionTitle: "Clear search and filters"
+                        ) {
+                            clearFilters()
+                        }
                     } else {
                         ForEach(movies) { title in
                             card(title).id(title.id)
                         }
                     }
                 }
-                .padding(24)
-                .padding(.bottom, DockBar.contentInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Theme.Space.xl)
+                .frame(maxWidth: 900)
+                .frame(maxWidth: .infinity)
             }
-            .scrollIndicators(.hidden)
             .screenBackground()
-            // Snap the expanded card to the top so its details are fully in view.
             .onChange(of: expandedID) { newValue in
                 guard let id = newValue else { return }
                 withAnimation(Motion.smooth) { proxy.scrollTo(id, anchor: .top) }
             }
         }
-        .navigationTitle("My Movies")
-        .toolbar {
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search movies")
+        .toolbar { toolbarContent }
+        .confirmationDialog(
+            "Remove \(pendingRemoval?.name ?? "movie")?",
+            isPresented: Binding(
+                get: { pendingRemoval != nil },
+                set: { if !$0 { pendingRemoval = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                if let title = pendingRemoval {
+                    appState.removeFromLibrary(title.id)
+                    if expandedID == title.id { expandedID = nil }
+                }
+                pendingRemoval = nil
+            }
+            Button("Keep", role: .cancel) { pendingRemoval = nil }
+        } message: {
+            Text("Its release dates and watch history will be removed from this Mac.")
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 appState.selectedSection = .discover
             } label: {
                 Label("Add Movie", systemImage: "plus")
             }
-            .help("Find a movie in Discover")
+            .help("Find a movie to track (⌘N)")
+
+            Menu {
+                Picker("Sort by", selection: sortBinding) {
+                    ForEach(Library.LibrarySort.allCases) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+            } label: {
+                Label("Sort", systemImage: "arrow.up.arrow.down")
+            }
+            .help("Sort movies")
+
+            Menu {
+                Picker("Show", selection: filterBinding) {
+                    ForEach(Library.MovieFilter.allCases) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+            } label: {
+                Label(
+                    "Filter",
+                    systemImage: filter == .all
+                        ? "line.3.horizontal.decrease.circle"
+                        : "line.3.horizontal.decrease.circle.fill"
+                )
+            }
+            .help("Filter movies")
         }
+    }
+
+    private var filterBinding: Binding<Library.MovieFilter> {
+        Binding(get: { filter }, set: { filterRaw = $0.rawValue })
+    }
+
+    private var sortBinding: Binding<Library.LibrarySort> {
+        Binding(get: { sort }, set: { sortRaw = $0.rawValue })
     }
 
     @ViewBuilder
@@ -58,95 +142,91 @@ struct MyMoviesView: View {
                     expandedID = expandedID == title.id ? nil : title.id
                 }
             } label: {
-                TitleRowView(title: title, nextLabel: nextLabel(for: title),
-                             isExpanded: expandedID == title.id,
-                             badge: appState.library.isMuted(title.id) ? "Muted" : nil)
+                TitleRowView(
+                    title: title,
+                    nextLabel: nextLabel(for: title),
+                    isExpanded: expandedID == title.id,
+                    badge: badge(for: title),
+                    badgeIcon: appState.library.watchedMovies.contains(title.id)
+                        ? "checkmark.circle" : "bell.slash"
+                )
             }
             .buttonStyle(.plain)
-            .contextMenu {
-                Button {
-                    appState.setPinned(!appState.library.isPinned(title.id), titleID: title.id)
-                } label: {
-                    Label(appState.library.isPinned(title.id) ? "Unpin" : "Pin to top",
-                          systemImage: "pin")
-                }
-                Button {
-                    appState.setAlertsMuted(!appState.library.isMuted(title.id), titleID: title.id)
-                } label: {
-                    Label(appState.library.isMuted(title.id) ? "Unmute alerts" : "Mute alerts",
-                          systemImage: appState.library.isMuted(title.id) ? "bell.fill" : "bell.slash")
-                }
-                Divider()
-                Button(role: .destructive) {
-                    appState.removeFromLibrary(title.id)
-                } label: {
-                    Label("Remove", systemImage: "trash")
-                }
-            }
+            .contextMenu { menu(for: title) }
+
             if expandedID == title.id {
+                Divider()
+                    .padding(.horizontal, Theme.Space.m)
                 TitleDetailContent(tmdbID: title.tmdbID, mediaType: .movie, name: title.name)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 12)
-                    .contentShape(Rectangle())
-                    .onTapGesture { collapse() }
+                    .padding(Theme.Space.m)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(PosterTintedCard(posterPath: title.posterPath))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .hoverLift()
+        .background(PosterTintedCard(posterPath: title.posterPath, cornerRadius: Theme.Radius.l))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.l, style: .continuous))
     }
 
-    private func subtitle(trackedCount: Int) -> String {
-        if trackedCount == 0 { return "Track your first movie from Discover" }
-        return "\(trackedCount) movie\(trackedCount == 1 ? "" : "s") tracked"
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "film")
-                .font(.system(size: 40))
-                .foregroundStyle(.tertiary)
-            Text("No movies yet")
-                .font(.headline)
-            Button {
-                appState.selectedSection = .discover
-            } label: {
-                Label("Find Movies in Discover", systemImage: "plus.circle")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
+    @ViewBuilder
+    private func menu(for title: Title) -> some View {
+        Button {
+            appState.setPinned(!appState.library.isPinned(title.id), titleID: title.id)
+        } label: {
+            Label(
+                appState.library.isPinned(title.id) ? "Unpin" : "Pin to top",
+                systemImage: appState.library.isPinned(title.id) ? "pin.slash" : "pin"
+            )
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-        .appear()
-    }
-
-    private func collapse() {
-        withAnimation(Motion.smooth) { expandedID = nil }
-    }
-
-    private func nextLabel(for title: Title) -> String? {
-        let releaseLabel = upcomingReleaseLabel(for: title)
-        if releaseLabel != nil { return releaseLabel }
-        // Not in the release-dates payload (nothing tracked there) — fall back to the
-        // movie's own release date while it's still in the future.
-        if let date = title.firstAirDate, date >= .now {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM d, yyyy"
-            return "Release: \(formatter.string(from: date))"
+        Button {
+            appState.setMovieWatched(
+                !appState.library.watchedMovies.contains(title.id),
+                titleID: title.id
+            )
+        } label: {
+            Label(
+                appState.library.watchedMovies.contains(title.id) ? "Mark unwatched" : "Mark watched",
+                systemImage: appState.library.watchedMovies.contains(title.id) ? "arrow.uturn.backward" : "checkmark"
+            )
         }
+        Button {
+            appState.setAlertsMuted(!appState.library.isMuted(title.id), titleID: title.id)
+        } label: {
+            Label(
+                appState.library.isMuted(title.id) ? "Unmute alerts" : "Mute alerts",
+                systemImage: appState.library.isMuted(title.id) ? "bell" : "bell.slash"
+            )
+        }
+        Divider()
+        Button(role: .destructive) {
+            pendingRemoval = title
+        } label: {
+            Label("Remove", systemImage: "trash")
+        }
+    }
+
+    private func clearFilters() {
+        searchText = ""
+        filterRaw = Library.MovieFilter.all.rawValue
+    }
+
+    private func badge(for title: Title) -> String? {
+        if appState.library.watchedMovies.contains(title.id) { return "Watched" }
+        if appState.library.isMuted(title.id) { return "Alerts muted" }
         return nil
     }
 
-    private func upcomingReleaseLabel(for title: Title) -> String? {
-        guard let release = (appState.library.movieReleases[title.id] ?? [])
+    private func nextLabel(for title: Title) -> String? {
+        if let release = (appState.library.movieReleases[title.id] ?? [])
             .filter({ ($0.date ?? .distantPast) >= .now })
             .min(by: { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }),
-              let date = release.date
-        else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = release.hasTime ? "MMM d 'at' HH:mm" : "MMM d"
-        return "\(release.kind.label): \(formatter.string(from: date))"
+           let date = release.date {
+            let when = DateText.upcoming(date, includeTime: release.hasTime)
+            return "\(release.kind.upcomingLabel) · \(when)"
+        }
+        // Not in the release-dates payload (nothing tracked there) — fall back to the
+        // movie's own release date while it's still in the future.
+        if let date = title.firstAirDate, date >= .now {
+            return "Release · \(DateText.upcoming(date))"
+        }
+        return nil
     }
 }

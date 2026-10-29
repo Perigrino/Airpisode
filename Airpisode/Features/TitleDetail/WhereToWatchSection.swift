@@ -9,16 +9,24 @@ struct WhereToWatchSection: View {
     let region: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             Text("Where to watch · \(region)")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 4)
 
             if let providers {
-                offerRow("Stream", providers.flatrate)
-                offerRow("Rent", providers.rent)
-                offerRow("Buy", providers.buy)
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    offerRow("Stream", providers.flatrate)
+                    offerRow("Rent", providers.rent)
+                    offerRow("Buy", providers.buy)
+                }
+                .padding(Theme.Space.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.m, style: .continuous)
+                        .fill(Theme.chip)
+                )
+
                 attribution(providers.link)
             } else {
                 emptyCard
@@ -28,50 +36,53 @@ struct WhereToWatchSection: View {
 
     /// TMDB has no offer for this region yet — styled like the season placeholder card.
     private var emptyCard: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.m) {
             Image(systemName: "tv")
-                .font(.title3)
                 .foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Not available in \(region) yet")
-                    .font(.callout)
-                    .fontWeight(.medium)
+                    .font(.callout.weight(.medium))
                 Text("Streaming offers will appear here once TMDB lists them for this country.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Theme.chip))
+        .padding(Theme.Space.m)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.m, style: .continuous)
+                .fill(Theme.chip)
+        )
     }
 
     @ViewBuilder
     private func offerRow(_ label: String, _ list: [TMDBWatchProvider]?) -> some View {
         if let list, !list.isEmpty {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Theme.Space.m) {
                 Text(label)
-                    .font(.caption)
-                    .fontWeight(.medium)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 52, alignment: .leading)
+
                 ForEach(list) { provider in
-                    VStack(spacing: 4) {
+                    VStack(spacing: Theme.Space.xs) {
                         AsyncImage(url: ImageURL.poster(provider.logoPath, size: "w45")) { image in
                             image.resizable().aspectRatio(contentMode: .fill)
                         } placeholder: {
-                            Color.white.opacity(0.08)
+                            Theme.chip
                         }
                         .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous))
 
                         Text(provider.name)
-                            .font(.system(size: 9))
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .frame(width: 56)
+                            .frame(width: 64)
                     }
-                    .padding(.vertical, 2)
+                    .accessibilityElement(children: .combine)
                 }
                 Spacer(minLength: 0)
             }
@@ -84,10 +95,9 @@ struct WhereToWatchSection: View {
         let target = link.flatMap { URL(string: $0) } ?? URL(string: "https://www.themoviedb.org")!
         return Link(destination: target) {
             Text("Powered by JustWatch")
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 2)
     }
 }

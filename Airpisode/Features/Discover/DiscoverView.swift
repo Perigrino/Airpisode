@@ -15,8 +15,12 @@ final class DiscoverViewModel: ObservableObject {
         self.client = client
     }
 
+    var trimmedQuery: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func search() async {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = trimmedQuery
         guard trimmed.count >= 2 else {
             results = []
             errorMessage = nil
@@ -31,7 +35,7 @@ final class DiscoverViewModel: ObservableObject {
         } catch is CancellationError {
             // Superseded by a newer keystroke; leave state alone.
         } catch {
-            errorMessage = "Search failed: \(error.localizedDescription)"
+            errorMessage = "Couldn't search. Check your connection and try again."
         }
         isSearching = false
     }
@@ -49,10 +53,20 @@ final class DiscoverViewModel: ObservableObject {
     }
 }
 
-enum DiscoverFilter: String, CaseIterable {
-    case all = "Best Match"
-    case tv = "TV Shows"
+enum DiscoverFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case tv = "Shows"
     case movies = "Movies"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all: return "All Results"
+        case .tv: return "Shows"
+        case .movies: return "Movies"
+        }
+    }
 }
 
 struct DiscoverView: View {
@@ -68,41 +82,13 @@ struct DiscoverView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 12) {
-                    PageHeader(title: "Discover",
-                               subtitle: "Find your next favorite show or movie")
-                    filterChips
-
-                    if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        if viewModel.recommendations.isEmpty {
-                            placeholder(appState.library.entries.isEmpty
-                                        ? "Search for a show or movie"
-                                        : "No recommendations yet")
-                        } else {
-                            sectionTitle(viewModel.recommendationReason ?? "Because you're tracking…")
-                            ForEach(filtered(viewModel.recommendations), id: \.uniqueID) { result in
-                                discoverRow(result).id(rowID(result))
-                            }
-                        }
-                    } else if let error = viewModel.errorMessage {
-                        placeholder(error)
-                    } else if viewModel.results.isEmpty && viewModel.isSearching {
-                        ForEach(0..<4, id: \.self) { _ in
-                            SkeletonRow()
-                        }
-                    } else if viewModel.results.isEmpty {
-                        placeholder("No results")
-                    } else {
-                        ForEach(filtered(viewModel.results), id: \.uniqueID) { result in
-                            discoverRow(result).id(rowID(result))
-                        }
-                    }
+                LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
+                    content
                 }
-                .padding(24)
-                .padding(.bottom, DockBar.contentInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Theme.Space.xl)
+                .frame(maxWidth: 900, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
-            .scrollIndicators(.hidden)
             .screenBackground()
             // Snap the expanded card to the top so its details are fully in view.
             .onChange(of: expandedID) { newValue in
@@ -110,8 +96,8 @@ struct DiscoverView: View {
                 withAnimation(Motion.smooth) { proxy.scrollTo(id, anchor: .top) }
             }
         }
-        .searchable(text: $viewModel.query, prompt: "Search movies, shows, people…")
-        .navigationTitle("Discover")
+        .searchable(text: $viewModel.query, placement: .toolbar, prompt: "Search shows, movies, and people")
+        .toolbar { toolbarContent }
         .onChange(of: viewModel.query) { _ in
             withAnimation(Motion.quick) { expandedID = nil }
         }
@@ -126,30 +112,86 @@ struct DiscoverView: View {
         }
     }
 
-    private func rowID(_ result: TMDBSearchResult) -> String {
-        "\(mediaType(of: result).rawValue)-\(result.id)"
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.trimmedQuery.isEmpty {
+            recommendations
+        } else {
+            searchResults
+        }
     }
 
-    private var filterChips: some View {
-        HStack(spacing: 8) {
-            ForEach(DiscoverFilter.allCases, id: \.self) { option in
-                Button {
-                    withAnimation(Motion.smooth) { filter = option }
-                } label: {
-                    Chip(text: option.rawValue, filled: filter == option)
-                }
-                .buttonStyle(.plain)
+    @ViewBuilder
+    private var recommendations: some View {
+        if viewModel.recommendations.isEmpty {
+            EmptyState(
+                systemImage: "sparkle.magnifyingglass",
+                title: appState.library.entries.isEmpty ? "Find something to watch" : "Nothing to suggest yet",
+                message: appState.library.entries.isEmpty
+                    ? "Search for a show or movie, then add it to your library to track new episodes and releases."
+                    : "Add a few more titles and suggestions will appear here."
+            )
+        } else {
+            SectionHeader(
+                title: viewModel.recommendationReason ?? "Suggested for you",
+                count: filtered(viewModel.recommendations).count
+            )
+            .padding(.top, Theme.Space.xs)
+
+            ForEach(filtered(viewModel.recommendations), id: \.uniqueID) { result in
+                discoverRow(result).id(rowID(result))
             }
         }
-        .animation(Motion.smooth, value: filter)
     }
 
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(.title3)
-            .fontWeight(.semibold)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 4)
+    @ViewBuilder
+    private var searchResults: some View {
+        if let error = viewModel.errorMessage {
+            InlineBanner(
+                message: error,
+                tone: .error,
+                actionTitle: "Try Again"
+            ) {
+                Task { await viewModel.search() }
+            }
+        } else if viewModel.results.isEmpty && viewModel.isSearching {
+            ForEach(0..<4, id: \.self) { _ in
+                SkeletonRow()
+            }
+        } else if filtered(viewModel.results).isEmpty {
+            EmptyState(
+                systemImage: "magnifyingglass",
+                title: "No matches for “\(viewModel.trimmedQuery)”",
+                message: filter == .all
+                    ? "Check the spelling, or try the show's original title."
+                    : "Try a different search, or show all results."
+            )
+        } else {
+            SectionHeader(title: filter.label, count: filtered(viewModel.results).count)
+                .padding(.top, Theme.Space.xs)
+
+            ForEach(filtered(viewModel.results), id: \.uniqueID) { result in
+                discoverRow(result).id(rowID(result))
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Picker("Filter", selection: $filter) {
+                ForEach(DiscoverFilter.allCases) { option in
+                    Text(option.rawValue).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help("Limit results to shows or movies")
+        }
+    }
+
+    private func rowID(_ result: TMDBSearchResult) -> String {
+        "\(mediaType(of: result).rawValue)-\(result.id)"
     }
 
     private func filtered(_ results: [TMDBSearchResult]) -> [TMDBSearchResult] {
@@ -172,29 +214,20 @@ struct DiscoverView: View {
                 SearchRowView(result: result, isExpanded: expandedID == id, isTracked: tracked)
             }
             .buttonStyle(.plain)
+
             if expandedID == id {
+                Divider()
+                    .padding(.horizontal, Theme.Space.m)
                 TitleDetailContent(tmdbID: result.id, mediaType: mediaType(of: result), name: result.displayName)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 12)
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation(Motion.smooth) { expandedID = nil } }
+                    .padding(Theme.Space.m)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(Theme.cardBackground(cornerRadius: 16))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .hoverLift()
+        .background(PosterTintedCard(posterPath: result.posterPath, cornerRadius: Theme.Radius.l))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.l, style: .continuous))
     }
 
     private func mediaType(of result: TMDBSearchResult) -> MediaType {
         result.mediaType == "movie" ? .movie : .tv
-    }
-
-    private func placeholder(_ text: String) -> some View {
-        Text(text)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 60)
-            .appear()
     }
 }

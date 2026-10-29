@@ -66,7 +66,22 @@ final class TMDBMapperTests: XCTestCase {
         let rel = TMDBMapper.movieReleases(resp, movieID: 1, region: "US", now: now)
         XCTAssertEqual(rel.count, 1)
         XCTAssertEqual(rel[0].kind, .tv)
-        XCTAssertEqual(rel[0].date, TMDBMapper.parseDateTime("2026-11-27T00:00:00.000Z"))
+        XCTAssertEqual(rel[0].date, TMDBMapper.parseDate("2026-11-27"))
+        XCTAssertEqual(rel[0].hasTime, false) // midnight is a date, not a showtime
+    }
+
+    func testMovieReleaseTreatsMidnightAsDateOnly() {
+        let resp = TMDBReleaseDatesResponse(id: 1, results: [
+            TMDBRegionReleases(iso3166_1: "US", releaseDates: [
+                TMDBReleaseDate(certification: nil, releaseDate: "2026-12-01T00:00:00.000Z", type: 4),
+                TMDBReleaseDate(certification: nil, releaseDate: "2026-12-02T18:30:00.000Z", type: 4),
+            ])
+        ])
+        let rel = TMDBMapper.movieReleases(resp, movieID: 1, region: "US", now: TMDBMapper.parseDate("2026-10-17")!)
+        // Same kind: the first upcoming one is kept.
+        XCTAssertEqual(rel.count, 1)
+        XCTAssertEqual(rel[0].hasTime, false)
+        XCTAssertEqual(rel[0].date, TMDBMapper.parseDate("2026-12-01"))
     }
 
     func testEpisodeMapping() {

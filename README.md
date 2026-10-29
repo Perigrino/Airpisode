@@ -8,19 +8,20 @@ Airpisode is a macOS app that tracks when your TV shows and movies come out. It 
 
 ## Screenshots
 
-| Upcoming | My Shows |
+| To Watch | Shows |
 | --- | --- |
-| ![Airpisode's Upcoming dashboard](Screenshots/upcoming.png) | ![Airpisode's My Shows list](Screenshots/my-shows.png) |
-| ![Airpisode's Discover tab](Screenshots/discover.png) | ![Airpisode's My Movies list](Screenshots/movies.png) |
+| ![Airpisode's To Watch dashboard](Screenshots/upcoming.png) | ![Airpisode's Shows list](Screenshots/my-shows.png) |
+| ![Airpisode's Discover page](Screenshots/discover.png) | ![Airpisode's Movies list](Screenshots/movies.png) |
 
 ## Features
 
-- **Upcoming dashboard**: groups releases into Today, This Week, and Later, each with a countdown.
+- **To Watch dashboard**: groups releases into Today, This Week, and Later, each with a countdown.
 - **Watchlist**: tracks shows and movies, with the next episode or release on each row.
+- **Search, filter, and sort**: finds a show or movie you track, or narrows a list to what is airing soon or not caught up.
 - **Episode tracking**: lists seasons and episodes, and marks what has aired.
 - **Release dates**: shows theatrical, digital, physical, and TV windows by region.
-- **Search**: searches TMDB and suggests titles based on what you track.
 - **Notifications**: alerts you before an episode or release, with a lead time you choose. Episode air times come from TVmaze when available.
+- **Native window**: a resizable sidebar window in light and dark mode, with the keyboard shortcuts in the menus (⌘1–⌘5 to switch pages, ⌘R to refresh, ⌘N to search).
 - **Poster-tinted cards**: each row picks a subtle color from its poster.
 - **Offline library**: stores your watchlist as JSON, so it loads without a network.
 

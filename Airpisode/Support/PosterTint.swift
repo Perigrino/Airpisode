@@ -73,19 +73,26 @@ struct PosterTintedCard: View {
     let posterPath: String?
     var cornerRadius: CGFloat = 16
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var tint: Color?
 
     var body: some View {
         Theme.cardBackground(cornerRadius: cornerRadius)
             .overlay {
                 if let tint {
+                    let strength = colorScheme == .dark ? 0.10 : 0.06
                     LinearGradient(
-                        colors: [tint.opacity(0.22), tint.opacity(0.0)],
+                        colors: [tint.opacity(strength), tint.opacity(0.0)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 }
+            }
+            .overlay {
+                // Keep the edge crisp even when the wash reaches it.
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 1)
             }
             .task(id: posterPath) {
                 let color = await PosterColorCache.shared.color(for: posterPath)

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Small inline popover shown when a cast member is tapped: basic person data
-/// fetched live from TMDB (`/person/{id}`), styled like the app's dark cards.
+/// fetched live from TMDB (`/person/{id}`). Uses the system popover surface.
 struct PersonPopoverView: View {
     let member: TMDBCastMember
     let appState: AppState
@@ -10,9 +10,10 @@ struct PersonPopoverView: View {
     @State private var finishedLoading = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
             portrait
-            VStack(alignment: .leading, spacing: 6) {
+
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
                 Text(member.name)
                     .font(.headline)
                 if let character = member.character, !character.isEmpty {
@@ -35,12 +36,12 @@ struct PersonPopoverView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineSpacing(2)
+                            .lineLimit(8)
                         // The popover only carries a glimpse; the full story lives on TMDB.
                         Link(destination: URL(string: "https://www.themoviedb.org/person/\(member.id)")!) {
-                            Text("Full bio →")
+                            Text("Full bio on TMDB")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(Theme.accent)
                         }
                     }
                 } else if finishedLoading {
@@ -55,12 +56,8 @@ struct PersonPopoverView: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(14)
-        .frame(width: 330, height: 330, alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.background)
-        )
+        .padding(Theme.Space.l)
+        .frame(width: 340, alignment: .topLeading)
         .task {
             person = await appState.fetchPerson(tmdbID: member.id)
             finishedLoading = true
@@ -71,10 +68,10 @@ struct PersonPopoverView: View {
         AsyncImage(url: ImageURL.poster(person?.profilePath ?? member.profilePath, size: "w185")) { image in
             image.resizable().aspectRatio(contentMode: .fill)
         } placeholder: {
-            Color.gray.opacity(0.2)
+            Theme.posterPlaceholder
         }
         .frame(width: 100, height: 150)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous))
     }
 
     /// "Born July 12, 1942 in Chicago, Illinois, USA" (+ "Died …" when applicable).
@@ -84,12 +81,17 @@ struct PersonPopoverView: View {
             parts.append("Born \(Self.usDateText(birthday))")
         }
         if let place = p.placeOfBirth {
-            parts.append(parts.isEmpty ? "From \(place)" : " in \(place)")
+            if var born = parts.first {
+                born += " in \(place)"
+                parts[0] = born
+            } else {
+                parts.append("From \(place)")
+            }
         }
         if let deathday = p.deathday {
             parts.append("· Died \(Self.usDateText(deathday))")
         }
-        return parts.isEmpty ? nil : parts.joined()
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     private func shortened(_ bio: String) -> String {

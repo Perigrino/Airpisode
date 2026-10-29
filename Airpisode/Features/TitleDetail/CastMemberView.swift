@@ -4,26 +4,27 @@ struct CastMemberView: View {
     let member: TMDBCastMember
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Theme.Space.xs) {
             AsyncImage(url: ImageURL.poster(member.profilePath, size: "w185")) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
-                Color.gray.opacity(0.2)
+                Theme.posterPlaceholder
             }
-            .frame(width: 90, height: 135)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(width: 84, height: 126)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous))
 
             Text(member.name)
-                .font(.caption)
-                .fontWeight(.medium)
+                .font(.caption.weight(.medium))
                 .lineLimit(1)
             if let character = member.character, !character.isEmpty {
                 Text(character)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
-        .frame(width: 90)
+        .frame(width: 84)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }

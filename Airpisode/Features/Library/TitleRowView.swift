@@ -5,42 +5,50 @@ struct TitleRowView: View {
     let title: Title
     let nextLabel: String?
     var isExpanded = false
-    /// Small state badge (e.g. "Muted") rendered beside the media-type chip.
+    /// Small state badge (e.g. "Muted") rendered under the title.
     var badge: String? = nil
+    var badgeIcon = "bell.slash"
 
     var body: some View {
-        HStack(spacing: 14) {
-            PosterImage(path: title.posterPath, width: 76, height: 114, cornerRadius: 10)
+        HStack(spacing: Theme.Space.m) {
+            PosterImage(path: title.posterPath, width: 44, height: 64, cornerRadius: 6)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title.name)
-                    .font(.title3)
-                    .fontWeight(.semibold)
+                    .font(.headline)
                     .lineLimit(2)
-                HStack(spacing: 6) {
-                    Chip(text: title.mediaType == .tv ? "TV Show" : "Movie")
-                    if let badge {
-                        Chip(text: badge)
-                    }
+
+                if let badge {
+                    Label(badge, systemImage: badgeIcon)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+
                 if let nextLabel {
-                    HStack(spacing: 5) {
-                        Image(systemName: "clock")
-                        Text(nextLabel)
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    Text(nextLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else {
+                    Text(title.mediaType == .tv ? "No upcoming episode" : "No upcoming release")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                 }
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.down")
-                .font(.caption)
+
+            Spacer(minLength: Theme.Space.s)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
-                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 .animation(Motion.quick, value: isExpanded)
         }
-        .padding(12)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.s)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(isExpanded ? "Collapse details" : "Expand details")
     }
 }

@@ -5,64 +5,73 @@ import SwiftUI
 /// app's design language in a compact form.
 struct MenuBarWatchList: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let items = appState.library.upcomingReleases()
             .filter { !appState.library.isWatchedMovie($0.title.id) }
 
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: Theme.Space.xs) {
             if items.isEmpty {
                 emptyState
             } else {
                 ForEach(items.prefix(5)) { item in
                     row(item)
+                    if item.id != items.prefix(5).last?.id {
+                        Divider()
+                    }
                 }
             }
 
-            Divider().padding(.vertical, 2)
+            Divider().padding(.vertical, Theme.Space.xs)
             footer
 
             if let error = appState.lastRefreshError {
                 Text(error)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(10)
+        .padding(Theme.Space.m)
         .frame(width: 300)
+        .tint(Theme.accentFill)
     }
 
     // MARK: - Rows
 
     private func row(_ item: UpcomingItem) -> some View {
-        HStack(spacing: 10) {
-            PosterImage(path: item.title.posterPath, size: "w92", width: 40, height: 60, cornerRadius: 8)
+        HStack(spacing: Theme.Space.s) {
+            PosterImage(path: item.title.posterPath, size: "w92", width: 40, height: 60, cornerRadius: Theme.Radius.s)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title.name)
-                    .font(.callout)
-                    .fontWeight(.medium)
+                    .font(.callout.weight(.medium))
                     .lineLimit(1)
                 Text(subtitle(for: item))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             markButton(item)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
         .contentShape(Rectangle())
         .onTapGesture { openToWatch() }
+        .accessibilityElement(children: .combine)
     }
 
     private func subtitle(for item: UpcomingItem) -> String {
         guard let date = item.date else { return item.label }
-        return "\(item.label) · \(Self.relativeText(date))"
+        let when = DateText.upcoming(date, includeTime: item.isTimed)
+        if item.title.mediaType == .movie {
+            return "Releases \(when)"
+        }
+        return "\(item.label) · \(when)"
     }
 
     /// One-tap clearing of the To Watch row. Episode items only offer a mark when the
@@ -71,76 +80,72 @@ struct MenuBarWatchList: View {
     private func markButton(_ item: UpcomingItem) -> some View {
         switch item.title.mediaType {
         case .movie:
-            Button {
-                withAnimation(Motion.quick) { appState.setMovieWatched(true, titleID: item.title.id) }
-            } label: {
-                Image(systemName: "checkmark.circle")
-                    .foregroundStyle(Theme.accent)
+            markWatchedButton(titleID: item.title.id, help: "Mark watched") {
+                appState.setMovieWatched(true, titleID: item.title.id)
             }
-            .buttonStyle(.plain)
-            .help("Mark watched")
         case .tv:
             if let episode = appState.library.nextEpisode(forTitle: item.title.id) {
-                Button {
-                    withAnimation(Motion.quick) {
-                        appState.setEpisodeWatched(true, episode: episode, titleID: item.title.id)
-                    }
-                } label: {
-                    Image(systemName: "checkmark.circle")
-                        .foregroundStyle(Theme.accent)
+                markWatchedButton(titleID: item.title.id, help: "Mark watched") {
+                    appState.setEpisodeWatched(true, episode: episode, titleID: item.title.id)
                 }
-                .buttonStyle(.plain)
-                .help("Mark watched")
             } else {
                 EmptyView()
             }
         }
     }
 
-    private var emptyState: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "checklist")
-                .font(.title3)
+    private func markWatchedButton(titleID: String, help: String, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(Motion.quick) { action() }
+        } label: {
+            Image(systemName: "checkmark.circle")
                 .foregroundStyle(Theme.accent)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel("Mark watched")
+    }
+
+    private var emptyState: some View {
+        HStack(spacing: Theme.Space.s) {
+            Image(systemName: "checklist")
+                .foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
             Text("Nothing coming up — you're all caught up")
                 .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, Theme.Space.m)
     }
 
     // MARK: - Footer
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: Theme.Space.m) {
             Button(action: openToWatch) {
                 Label("Open Airpisode", systemImage: "arrow.up.forward")
             }
+            .buttonStyle(.bordered)
             Spacer()
             Button {
                 Task { await appState.runFullRefresh() }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(.bordered)
+            .disabled(appState.isRefreshing)
         }
-        .buttonStyle(.plain)
-        .font(.callout)
+        .controlSize(.small)
     }
 
-    /// Opens the main window on the To Watch page — the same path the dock icon uses, so
-    /// a hidden window comes back instead of a second one appearing.
+    /// Opens the main window on the To Watch page, so a hidden or closed window comes back
+    /// instead of a second one appearing.
     private func openToWatch() {
         appState.selectedSection = .dashboard
-        BackgroundCloseIntercept.bringMainWindowBackIfNeeded()
-    }
-
-    private static let relativeFormatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .full
-        return f
-    }()
-
-    private static func relativeText(_ date: Date) -> String {
-        if date <= Date.now { return "out now" }
-        return relativeFormatter.localizedString(for: date, relativeTo: .now)
+        if !AppDelegate.showMainWindow() {
+            openWindow(id: "main")
+        }
     }
 }

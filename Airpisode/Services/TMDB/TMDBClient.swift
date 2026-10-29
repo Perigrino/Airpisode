@@ -48,21 +48,57 @@ struct TMDBClient: TMDBClientProtocol {
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
         var comps = URLComponents(url: TMDBClient.base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         comps.queryItems = query + [URLQueryItem(name: "api_key", value: apiKey())]
-        let (data, response) = try await session.data(from: comps.url!)
-        guard let http = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
+        var request = URLRequest(url: comps.url!)
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        var attempt = 0
+        while true {
+            do {
+                let (data, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+                switch http.statusCode {
+                case 200:
+                    return try TMDBClient.decoder.decode(T.self, from: data)
+                case 401:
+                    throw TMDBError.missingKey
+                case 404:
+                    throw TMDBError.notFound
+                case 429, 500, 502, 503, 504:
+                    guard attempt < 2 else { throw TMDBError.server(http.statusCode) }
+                    attempt += 1
+                    try await Task.sleep(nanoseconds: Self.delay(for: http, attempt: attempt))
+                    continue
+                default:
+                    throw TMDBError.server(http.statusCode)
+                }
+            } catch let error as URLError where Self.isTransient(error) && attempt < 2 {
+                attempt += 1
+                try await Task.sleep(nanoseconds: UInt64(0.25 * pow(2, Double(attempt - 1)) * 1_000_000_000))
+                continue
+            }
         }
-        switch http.statusCode {
-        case 200:
-            break
-        case 401:
-            throw TMDBError.missingKey
-        case 404:
-            throw TMDBError.notFound
+    }
+
+    /// A server's `Retry-After` wins when it sends one; otherwise back off 0.4 s, then 0.8 s.
+    private static func delay(for response: HTTPURLResponse, attempt: Int) -> UInt64 {
+        if let raw = response.value(forHTTPHeaderField: "Retry-After"),
+           let seconds = TimeInterval(raw), seconds > 0, seconds <= 10 {
+            return UInt64(seconds * 1_000_000_000)
+        }
+        return UInt64(0.4 * pow(2, Double(attempt - 1)) * 1_000_000_000)
+    }
+
+    private static func isTransient(_ error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut, .networkConnectionLost, .cannotConnectToHost, .dnsLookupFailed,
+             .cannotFindHost, .resourceUnavailable:
+            return true
         default:
-            throw TMDBError.server(http.statusCode)
+            return false
         }
-        return try TMDBClient.decoder.decode(T.self, from: data)
     }
     func searchMulti(query: String) async throws -> [TMDBSearchResult] {
         let page: TMDBSearchResponse = try await get("search/multi", query: [URLQueryItem(name: "query", value: query)])

@@ -9,12 +9,12 @@ struct WelcomeView: View {
     var onSkip: () -> Void
 
     var body: some View {
-        VStack(spacing: 20) {
-            VStack(spacing: 14) {
+        VStack(spacing: Theme.Space.xl) {
+            VStack(spacing: Theme.Space.m) {
                 AppLogo(size: 84)
-                VStack(spacing: 4) {
+                VStack(spacing: Theme.Space.xs) {
                     Text("Airpisode")
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.title2.weight(.bold))
                     Text("Never miss what's next.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -27,24 +27,25 @@ struct WelcomeView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
                 Text("Get a key in three steps")
                     .font(.headline)
                 TMDBKeyHelp()
             }
-            .padding(16)
+            .padding(Theme.Space.l)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.cardBackground(cornerRadius: 14))
+            .background(Theme.cardBackground(cornerRadius: Theme.Radius.l))
 
             APIKeyForm(onSave: onDone)
 
-            Button("Skip for now", action: onSkip)
-                .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack {
+                Button("Skip for Now", action: onSkip)
+                    .buttonStyle(.link)
+                    .font(.callout)
+            }
         }
-        .padding(28)
-        .frame(width: 460)
+        .padding(Theme.Space.xxl)
+        .frame(width: 480)
         .screenBackground()
     }
 }

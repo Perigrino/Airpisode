@@ -7,50 +7,63 @@ struct ScheduleChangesCard: View {
     let records: [ScheduleChangeRecord]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label(records.count == 1 ? "Release change" : "\(records.count) release changes",
-                      systemImage: "calendar.badge.exclamationmark")
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(
+                    records.count == 1 ? "Release change" : "\(records.count) release changes",
+                    systemImage: "calendar.badge.exclamationmark"
+                )
+                .font(.headline)
+
                 Spacer()
-                Button("Mark read") { appState.markScheduleChangesRead() }
-                    .font(.caption)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Theme.accent)
+
+                Button("Mark Read") { appState.markScheduleChangesRead() }
+                    .controlSize(.small)
+                    .help("Dismiss these change notices")
             }
 
-            ForEach(records.prefix(3)) { record in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(record.titleName)
-                        .font(.callout)
-                        .fontWeight(.medium)
-                    Text(record.label)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
-                    Text(dateText(record))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                ForEach(records.prefix(3)) { record in
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                        Text(record.titleName)
+                            .font(.callout.weight(.medium))
+                            .lineLimit(1)
+                        Text(record.label)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text(dateText(record))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    .padding(.vertical, 5)
+                    .accessibilityElement(children: .combine)
+
+                    if record.id != records.prefix(3).last?.id {
+                        Divider()
+                    }
                 }
             }
 
             if records.count > 3 {
-                Text("+\(records.count - 3) more")
+                Text("\(records.count - 3) more in the original notice")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(14)
+        .padding(Theme.Space.l)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.chip))
+        .background(Theme.cardBackground(cornerRadius: Theme.Radius.l))
         .appear()
     }
 
     private func dateText(_ record: ScheduleChangeRecord) -> String {
-        let newDate = record.newDate.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "TBA"
+        let newDate = record.newDate.map { DateText.upcoming($0, includeTime: true) } ?? "TBA"
         switch record.kind {
         case .dateChanged:
-            let old = record.oldDate.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "TBA"
+            let old = record.oldDate.map { DateText.airing($0) } ?? "TBA"
             return "\(old) → \(newDate)"
         case .newRelease:
             return newDate
