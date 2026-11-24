@@ -1,26 +1,5 @@
 import SwiftUI
 
-/// Page header: one title, one line of orientation. Used inside content, never as a
-/// second window title.
-struct PageHeader: View {
-    let title: String
-    var subtitle: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text(title)
-                .font(.title2.weight(.semibold))
-            if let subtitle {
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 /// Section heading with an optional count and trailing accessory.
 struct SectionHeader: View {
     let title: String
@@ -130,29 +109,6 @@ struct CountdownBadge: View {
         guard let date else { return "Release date to be announced" }
         if date <= now { return "Available now" }
         return "In " + DateText.relative(date, now: now)
-    }
-}
-
-/// Filter pill: same surface as Chip, filled when selected, >= 22 pt tall.
-struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule().fill(isSelected ? AnyShapeStyle(Theme.accentFill) : AnyShapeStyle(Theme.chip))
-                )
-                .foregroundStyle(isSelected ? Theme.onAccent : Color.secondary)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
@@ -276,30 +232,6 @@ struct AppLogo: View {
         .frame(width: size, height: size)
         .shadow(color: Theme.accent.opacity(0.28), radius: size * 0.16, y: size * 0.06)
         .accessibilityHidden(true)
-    }
-}
-
-/// Small portrait for cast rows.
-struct CastAvatar: View {
-    let name: String
-    let profilePath: String?
-
-    var body: some View {
-        VStack(spacing: Theme.Space.xs) {
-            AsyncImage(url: ImageURL.poster(profilePath, size: "w185")) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Theme.chip
-            }
-            .frame(width: 64, height: 86)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous))
-
-            Text(name)
-                .font(.caption2)
-                .lineLimit(1)
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 
