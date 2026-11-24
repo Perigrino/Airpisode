@@ -302,3 +302,15 @@ struct CastAvatar: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+/// Quiet signature at the bottom of the About pane. Deliberately the smallest text
+/// style and the dimmest label color, so it reads as a footnote rather than a feature.
+struct MadeWithLoveFooter: View {
+    var body: some View {
+        Text("Made with ❤️ by Perigrino")
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .accessibilityLabel("Made with love by Perigrino")
+    }
+}

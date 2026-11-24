@@ -343,6 +343,9 @@ private struct AboutSettingsView: View {
                 Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                MadeWithLoveFooter()
+                    .padding(.top, Theme.Space.s)
             }
         }
         .formStyle(.grouped)
