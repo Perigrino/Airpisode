@@ -30,7 +30,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "-"
         SWIFT_VERSION: "5.9"
-        MARKETING_VERSION: "3.0.4"
+        MARKETING_VERSION: "3.0.5"
         CURRENT_PROJECT_VERSION: "1"
     configFiles:
       Debug: Airpisode/Config/App.xcconfig
