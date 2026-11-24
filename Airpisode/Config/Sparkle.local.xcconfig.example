@@ -1,0 +1,14 @@
+// Copy to `Sparkle.local.xcconfig` (same folder) and fill in both values.
+// The file is git-ignored; never commit real keys.
+//
+// SU_FEED_URL      Hosted appcast, e.g.
+//                  https://github.com/<owner>/Airpisode/releases/latest/download/appcast.xml
+//                  Must be HTTPS. See docs/UPDATES.md.
+// SU_PUBLIC_ED_KEY The public half printed by Sparkle's `generate_keys` tool.
+//
+// Note the `/$()/` in the URL: xcconfig treats `//` as the start of a comment, and the
+// empty `$()` expansion is the standard way to keep the slashes. Paste the URL with the
+// `$()` exactly as shown.
+
+SU_FEED_URL = https:/$()/example.com/appcast.xml
+SU_PUBLIC_ED_KEY = REPLACE_WITH_BASE64_PUBLIC_KEY

@@ -41,6 +41,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 @main
 struct AirpisodeApp: App {
     @StateObject private var appState = AppState()
+    @StateObject private var updater = SparkleUpdater()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -81,11 +82,20 @@ struct AirpisodeApp: App {
                     )
                 }
             }
+
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    updater.checkForUpdates()
+                }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+                .disabled(!updater.canCheckForUpdates)
+            }
         }
 
         Settings {
             SettingsView()
                 .environmentObject(appState)
+                .environmentObject(updater)
         }
 
         MenuBarExtra {

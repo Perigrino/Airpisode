@@ -273,6 +273,7 @@ private struct NotificationSettingsView: View {
 // MARK: - About
 
 private struct AboutSettingsView: View {
+    @EnvironmentObject private var updater: SparkleUpdater
     private var version: String {
         let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
@@ -314,6 +315,30 @@ private struct AboutSettingsView: View {
                 LabeledContent("Streaming offers", value: "JustWatch")
             }
 
+            Section("Updates") {
+                switch updater.status {
+                case .configured:
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { updater.automaticallyChecksForUpdates },
+                        set: { updater.automaticallyChecksForUpdates = $0 }
+                    ))
+                    Button("Check for Updates…") {
+                        updater.checkForUpdates()
+                    }
+                    Text("New versions are checked daily and signed updates install in place, with release notes shown before installing.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                case .unconfigured(let reason):
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("In-app updates are off in this build. Add a feed URL and public key to enable them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
             Section {
                 Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
                     .font(.caption)

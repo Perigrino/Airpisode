@@ -1,0 +1,15 @@
+// Build settings shared by every configuration.
+//
+// The Sparkle values are public, so they live here rather than in a local file:
+// the feed is a public appcast and the key is the public half of the EdDSA pair that
+// signs it. The private key stays in the release machine's Keychain and never enters
+// the repo. See docs/UPDATES.md.
+//
+// A git-ignored `Sparkle.local.xcconfig` can override either value for testing, and
+// `../TMDBKey.xcconfig` supplies a developer TMDB key for local builds.
+
+SU_FEED_URL = https:/$()/github.com/Perigrino/Airpisode/releases/latest/download/appcast.xml
+SU_PUBLIC_ED_KEY = cBhKG2WEQ9rbkRdFwiPWisyzkzvzMCaRWw1haq98Sg0=
+
+#include? "Sparkle.local.xcconfig"
+#include? "../TMDBKey.xcconfig"

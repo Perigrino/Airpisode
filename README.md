@@ -24,12 +24,15 @@ Airpisode is a macOS app that tracks when your TV shows and movies come out. It 
 - **Native window**: a resizable sidebar window in light and dark mode, with the keyboard shortcuts in the menus (⌘1–⌘5 to switch pages, ⌘R to refresh, ⌘N to search).
 - **Poster-tinted cards**: each row picks a subtle color from its poster.
 - **Offline library**: stores your watchlist as JSON, so it loads without a network.
+- **Signed updates**: checks once a day, or on demand from the menu (⇧⌘U) or Settings. Sparkle verifies the appcast and archive signatures before installing.
 
 ## Install
 
 Airpisode ships as a disk image. Download the latest `Airpisode-<version>.dmg`, open it, and drag Airpisode to your Applications folder. The build is not notarized, so macOS may warn on first launch: right-click Airpisode and choose Open.
 
 The app ships without an API key. On first launch it asks for your own free TMDB key, walks you through getting one, and saves it on your Mac. Change it any time in Settings.
+
+Published builds update themselves: **Airpisode ▸ Check for Updates…** (⇧⌘U) or **Settings ▸ About**. Updates are optional and install only when you confirm. See [docs/UPDATES.md](docs/UPDATES.md).
 
 Get a key from [TMDB API settings](https://www.themoviedb.org/settings/api).
 
@@ -59,6 +62,14 @@ open Airpisode.xcodeproj
 
 `Airpisode.xcodeproj` is generated from `project.yml`, and `TMDBKey.xcconfig` holds your key. Neither is tracked, and you should never commit your key. A key entered in Settings overrides the xcconfig.
 
+In-app updates need two more values. Copy the example and fill in a feed URL and Sparkle public key; without it the app runs with updates switched off:
+
+```bash
+cp Airpisode/Config/Sparkle.local.xcconfig.example Airpisode/Config/Sparkle.local.xcconfig
+```
+
+[`docs/UPDATES.md`](docs/UPDATES.md) covers key generation, the release pipeline, and troubleshooting.
+
 ## Development
 
 Build and test from the command line:
@@ -74,11 +85,13 @@ Build a disk image with no key baked in:
 ./Scripts/build-dmg.sh
 ```
 
-The image lands in `dist/`. See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
+The image lands in `dist/`. Sign and notarize it for distribution with `AIRPISODE_SIGN_IDENTITY` and `NOTARIZE=1`, then generate the appcast with `./Scripts/make-appcast.sh`. See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions and [docs/UPDATES.md](docs/UPDATES.md) for releases.
 
 The same steps run automatically on GitHub Actions: pushes to `main` and pull
 requests execute the test suite keylessly, and pushing a `v*` tag builds the
-DMG and publishes it as a GitHub release with its sha256 in the notes.
+DMG and publishes it as a GitHub release with its sha256 in the notes. When the
+Sparkle signing secrets are configured, the same job also generates the signed
+appcast that existing copies update from.
 
 ## How it works
 
@@ -86,7 +99,7 @@ Airpisode has no backend. It reads dates from TMDB and exact TV air times from T
 
 ## Data and privacy
 
-Your library lives at `~/Library/Application Support/Airpisode/library.json`, and your key is stored in your app preferences. Airpisode sends your key and search terms to TMDB, and show identifiers to TVmaze to look up episode air times. There is no analytics and no telemetry.
+Your library lives at `~/Library/Application Support/Airpisode/library.json`, and your key is stored in your app preferences. Airpisode sends your key and search terms to TMDB, and show identifiers to TVmaze to look up episode air times. An update check fetches a signed appcast from GitHub and sends no library data. There is no analytics and no telemetry.
 
 ## Attribution
 

@@ -13,6 +13,13 @@ xcuserdata/
 # Secrets — TMDB API key, never commit
 Airpisode/TMDBKey.xcconfig
 
+# Secrets — Sparkle feed URL and EdDSA public key for this machine/CI
+Airpisode/Config/Sparkle.local.xcconfig
+
+# Sparkle's private EdDSA key: exporting it to a file is only for CI
+*.sparkle-ed-key
+sparkle_ed_private_key
+
 # Swift Package Manager (if ever added)
 .build/
 .swiftpm/

@@ -10,7 +10,11 @@ Follow the setup steps in the [README](README.md) to get a working build with yo
 
 - Keep the app local-only. Airpisode has no backend, accounts, or sync.
 - Never commit `Airpisode/TMDBKey.xcconfig` or any API key.
-- Keep the app target free of third-party dependencies.
+- Keep the app target free of third-party dependencies. Sparkle is the one
+  exception: it is how shipped builds update themselves, pinned to an exact
+  version in `project.yml`. Keep it behind `Services/Updates` rather than
+  calling it from views.
+- Never commit `Airpisode/Config/Sparkle.local.xcconfig` or an EdDSA private key.
 - Add a test for every behavior change.
 
 ## Conventions
@@ -18,6 +22,9 @@ Follow the setup steps in the [README](README.md) to get a working build with yo
 - **Commits**: short, imperative subjects. Prefix with `feat:`, `fix:`, `docs:`, or `chore:`.
 - **Code**: match the surrounding style, and keep one responsibility per file.
 - **Tests**: put them in `AirpisodeTests` and stub the network with `StubTMDBClient`.
+- **Build settings**: `project.yml` is the source of truth, and local values live in
+  xcconfig files it includes. Never edit `Airpisode.xcodeproj` by hand.
+- **Releases**: follow [docs/UPDATES.md](docs/UPDATES.md) so the appcast and DMG stay in step.
 
 ## Sending a change
 
