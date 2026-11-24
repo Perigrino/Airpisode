@@ -9,6 +9,8 @@ struct APIKeyForm: View {
     @State private var key: String = Secrets.tmdbKey
     @State private var saved = false
     @State private var isEditing = false
+    /// The key is masked by default so a shoulder-surfer never reads it off the screen.
+    @State private var isRevealed = false
 
     private var trimmed: String { key.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -27,12 +29,30 @@ struct APIKeyForm: View {
             }
 
             HStack(spacing: Theme.Space.s) {
-                KeyTextField(
-                    text: $key,
-                    isEditing: $isEditing,
-                    placeholder: "Paste your TMDB API key",
-                    onChange: { saved = false }
-                )
+                HStack(spacing: Theme.Space.s) {
+                    KeyTextField(
+                        text: $key,
+                        isEditing: $isEditing,
+                        isSecure: !isRevealed,
+                        placeholder: "Paste your TMDB API key",
+                        onChange: { saved = false }
+                    )
+                    // Rebuild the AppKit field when the mask flips; NSTextField cannot
+                    // switch between secure and plain in place.
+                    .id(isRevealed)
+
+                    Button {
+                        isRevealed.toggle()
+                    } label: {
+                        Image(systemName: isRevealed ? "eye.slash" : "eye")
+                            .font(.system(size: 12, weight: .medium))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(isRevealed ? "Hide the key" : "Show the key")
+                    .accessibilityLabel(isRevealed ? "Hide API key" : "Show API key")
+                }
                 .padding(.horizontal, Theme.Space.s)
                 .frame(height: 26)
                 .background(
@@ -60,6 +80,7 @@ struct APIKeyForm: View {
     private func save() {
         guard !trimmed.isEmpty else { return }
         Secrets.setTMDBKey(trimmed)
+        isRevealed = false
         withAnimation(Motion.quick) { saved = true }
         onSave()
     }
@@ -70,13 +91,16 @@ struct APIKeyForm: View {
 private struct KeyTextField: NSViewRepresentable {
     @Binding var text: String
     @Binding var isEditing: Bool
+    var isSecure: Bool = false
     var placeholder: String
     var onChange: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField(string: text)
+        let field: NSTextField = isSecure
+            ? NSSecureTextField(string: text)
+            : NSTextField(string: text)
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
@@ -85,6 +109,7 @@ private struct KeyTextField: NSViewRepresentable {
         field.alignment = .left
         field.usesSingleLineMode = true
         field.lineBreakMode = .byClipping
+        field.isAutomaticTextCompletionEnabled = false
         field.delegate = context.coordinator
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
